@@ -2,7 +2,7 @@
 GPU = True                                  # running on GPU is highly suggested
 TEST_MODE = False                           # turning on the testmode means the code will run on a small dataset.
 CLEAN = True                               # set to "True" if you want to clean the temporary large files after generating result
-MODEL = 'resnet18'                          # model arch: resnet18, alexnet, resnet50, densenet161
+MODEL = 'alexnet'                          # model arch: resnet18, alexnet, resnet50, densenet161
 DATASET = 'places365'                       # model trained on: places365 or imagenet
 QUANTILE = 0.005                            # the threshold used for activation
 SEG_THRESHOLD = 0.04                        # the threshold used for visualization
@@ -52,8 +52,15 @@ elif MODEL == 'densenet161':
 elif MODEL == 'resnet50':
     FEATURE_NAMES = ['layer4']
     if DATASET == 'places365':
-        MODEL_FILE = 'zoo/whole_resnet50_places365_python36.pth.tar'
-        MODEL_PARALLEL = False
+        #MODEL_FILE = 'zoo/whole_resnet50_places365_python36.pth.tar'
+        MODEL_FILE = 'zoo/resnet50_places365.pth.tar'
+        MODEL_PARALLEL = True
+
+elif MODEL == 'alexnet':
+    FEATURE_NAMES = ['features']
+    if DATASET == 'places365':
+        MODEL_FILE = 'zoo/alexnet_places365.pth.tar'
+        MODEL_PARALLEL = True
 
 if TEST_MODE:
     WORKERS = 1
@@ -64,7 +71,7 @@ if TEST_MODE:
     OUTPUT_FOLDER += "_test"
 else:
     WORKERS = 12
-    BATCH_SIZE = 128
+    BATCH_SIZE = 128  # for resent50: 64
     TALLY_BATCH_SIZE = 16
     TALLY_AHEAD = 4
     INDEX_FILE = 'index.csv'
