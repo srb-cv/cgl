@@ -8,6 +8,7 @@ import os
 import shutil
 import time
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -61,7 +62,7 @@ parser.add_argument('--gpu', default=0, type=int,
 
 
 best_prec1 = 0
-
+penalty_lambda_weight = 0.01
 
 def main():
     global args, best_prec1
@@ -180,6 +181,12 @@ def train(train_loader, model, criterion, optimizer, epoch):
         output = model(input)
         loss = criterion(output, target)
 
+        # compute the conv regularizers
+        regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+        weight_reg = regulrizer_init + regularize_conv_layers(model, 0.01)
+        weight_reg = weight_reg.cuda()
+        loss = loss + weight_reg
+
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), input.size(0))
@@ -295,6 +302,41 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+
+def regularize_tensor_groups(conv_weight_params, number_of_groups = 5, group_norm = 2, layer_norm = 1.33):
+    neurons_per_group = math.floor(conv_weight_params.shape[0] / number_of_groups)
+    tensor_groups = conv_weight_params.unfold(0, neurons_per_group, neurons_per_group) # tested for convs only
+    group_norm_data = [tensor_groups[i].norm(group_norm) for i in range(number_of_groups)]
+    if layer_norm == 1:
+        layer_norm_data = sum(group_norm_data)
+    else:
+        group_norm_tensor = torch.stack(group_norm_data, 0)
+        layer_norm_data = group_norm_tensor.norm(layer_norm)
+
+    return layer_norm_data
+
+
+def regularize_conv_layers(model, penalty):
+    weight_param_conv5 = dict(model.named_parameters())['features.module.10.weight'] # conv5
+    weight_param_conv4 = dict(model.named_parameters())['features.module.8.weight']  # conv4
+    weight_param_conv3 = dict(model.named_parameters())['features.module.6.weight']  # conv3
+    weight_param_conv2 = dict(model.named_parameters())['features.module.3.weight']  #conv2
+    weight_param_conv1 = dict(model.named_parameters())['features.module.0.weight']  #conv1
+
+    regularizer_term_conv5 = regularize_tensor_groups(weight_param_conv5).cuda()
+    regularizer_term_conv4 = regularize_tensor_groups(weight_param_conv4).cuda()
+    regularizer_term_conv3 = regularize_tensor_groups(weight_param_conv3).cuda()
+    regularizer_term_conv2 = regularize_tensor_groups(weight_param_conv2).cuda()
+    regularizer_term_conv1 = regularize_tensor_groups(weight_param_conv1).cuda()
+
+    weight_reg = penalty * (regularizer_term_conv5 + \
+                 regularizer_term_conv4 + \
+                 regularizer_term_conv3 + \
+                 regularizer_term_conv2 + \
+                 regularizer_term_conv1)
+
+    return weight_reg
 
 
 if __name__ == '__main__':
