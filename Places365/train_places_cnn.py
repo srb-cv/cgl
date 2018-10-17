@@ -1,4 +1,3 @@
-# this code is modified from the pytorch example code: https://github.com/pytorch/examples/blob/master/imagenet/main.py
 # after the model is trained, you might use convert_model.py to remove the data parallel module to make the model as standalone weight.
 #
 # Bolei Zhou
@@ -18,6 +17,11 @@ import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
+import torch.nn.functional as F
+
+from tensorboardX import SummaryWriter
+writer = SummaryWriter()
+
 
 import wideresnet
 import pdb
@@ -62,7 +66,7 @@ parser.add_argument('--gpu', default=0, type=int,
 
 
 best_prec1 = 0
-penalty_lambda_weight = 0.01
+penalty_lambda_weight = 0
 
 def main():
     global args, best_prec1
@@ -134,7 +138,7 @@ def main():
 
 
     if args.evaluate:
-        validate(val_loader, model, criterion)
+        validate(val_loader, model, criterion, epoch=0)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -144,7 +148,7 @@ def main():
         train(train_loader, model, criterion, optimizer, epoch)
 
         # evaluate on validation set
-        prec1 = validate(val_loader, model, criterion)
+        prec1 = validate(val_loader, model, criterion, epoch)
 
         # remember best prec@1 and save checkpoint
         is_best = prec1 > best_prec1
@@ -164,6 +168,8 @@ def train(train_loader, model, criterion, optimizer, epoch):
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
+    reg_losses = AverageMeter()
+
 
     # switch to train mode
     model.train()
@@ -179,19 +185,34 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
         # compute output
         output = model(input)
-        loss = criterion(output, target)
+        criterion_loss = criterion(output, target)
 
-        # compute the conv regularizers
-        regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-        weight_reg = regulrizer_init + regularize_conv_layers(model, 0.01)
-        weight_reg = weight_reg.cuda()
-        loss = loss + weight_reg
+        if penalty_lambda_weight == 0:
+            weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
+            loss = criterion_loss + weight_reg
+        else:
+            # print("Applying Block Norm Regularization")
+            # compute the conv regularizers
+            regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+            weight_reg = regulrizer_init + regularize_conv_layers(model, penalty_lambda_weight)
+            weight_reg = weight_reg.cuda()
+            loss = criterion_loss + weight_reg
+
+
+
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), input.size(0))
         top1.update(prec1[0], input.size(0))
         top5.update(prec5[0], input.size(0))
+        reg_losses.update(weight_reg.item(), input.size(0))
+
+        # Display on tensorboard
+        writer.add_scalar('train/loss', loss.item(), i)
+        writer.add_scalar('train/reg_term', weight_reg.item(), i)
+        writer.add_scalar('train/prec1', prec1[0], i)
+        writer.add_scalar('train/prec5', prec5[0], i)
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -207,17 +228,22 @@ def train(train_loader, model, criterion, optimizer, epoch):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                  'Reg_term {weight_reg.val:.4f} ({weight_reg.avg:.4f})\t'
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                    epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses, top1=top1, top5=top5))
+                   data_time=data_time, loss=losses,  weight_reg=reg_losses,
+                   top1=top1, top5=top5))
 
 
-def validate(val_loader, model, criterion):
+
+
+def validate(val_loader, model, criterion, epoch):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
+    reg_losses = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
@@ -230,11 +256,21 @@ def validate(val_loader, model, criterion):
 
             # compute output
             output = model(input)
-            loss = criterion(output, target)
+            criterion_loss = criterion(output, target)
+
+            if penalty_lambda_weight == 0:
+                weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
+                loss = criterion_loss + weight_reg
+            else:
+                # compute the conv regularizers
+                regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+                weight_reg = regulrizer_init + regularize_conv_layers(model, penalty_lambda_weight)
+                loss = criterion_loss + weight_reg
 
             # measure accuracy and record loss
             prec1, prec5 = accuracy(output, target, topk=(1, 5))
             losses.update(loss.item(), input.size(0))
+            reg_losses.update(weight_reg.item(), input.size(0))
             top1.update(prec1[0], input.size(0))
             top5.update(prec5[0], input.size(0))
 
@@ -246,13 +282,20 @@ def validate(val_loader, model, criterion):
                 print('Test: [{0}/{1}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                      'Reg_term {weight_reg.val:.4f} ({weight_reg.avg:.4f})\t'
                       'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                       'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                       i, len(val_loader), batch_time=batch_time, loss=losses,
+                       i, len(val_loader), batch_time=batch_time, loss=losses, weight_reg=reg_losses,
                        top1=top1, top5=top5))
 
         print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
+
+        # Display on tensorboard
+        writer.add_scalar('val/loss', losses.avg, epoch)
+        writer.add_scalar('val/reg_term', reg_losses.avg, epoch)
+        writer.add_scalar('val/prec1', top1.avg, epoch)
+        writer.add_scalar('train/prec5', top5.avg, epoch)
     return top1.avg
 
 
@@ -308,11 +351,16 @@ def regularize_tensor_groups(conv_weight_params, number_of_groups = 5, group_nor
     neurons_per_group = math.floor(conv_weight_params.shape[0] / number_of_groups)
     tensor_groups = conv_weight_params.unfold(0, neurons_per_group, neurons_per_group) # tested for convs only
     group_norm_data = [tensor_groups[i].norm(group_norm) for i in range(number_of_groups)]
-    if layer_norm == 1:
-        layer_norm_data = sum(group_norm_data)
-    else:
-        group_norm_tensor = torch.stack(group_norm_data, 0)
-        layer_norm_data = group_norm_tensor.norm(layer_norm)
+
+    group_norm_tensor = torch.stack(group_norm_data, 0)
+    layer_norm_data = group_norm_tensor.norm(layer_norm)
+
+    if(sum(torch.isnan(group_norm_tensor)) > 0):
+        print("Error To be handled")
+        print("layer_norm_data", layer_norm_data)
+        print("group_norm_tensor", group_norm_tensor)
+        #exit(0)
+
 
     return layer_norm_data
 
@@ -335,6 +383,10 @@ def regularize_conv_layers(model, penalty):
                  regularizer_term_conv3 + \
                  regularizer_term_conv2 + \
                  regularizer_term_conv1)
+
+    if(torch.isnan(weight_reg)):
+        print("weight reg nan found, counting as zero")
+        weight_reg = torch.tensor([0.0]).cuda()
 
     return weight_reg
 
