@@ -22,7 +22,7 @@ Note that AlexNet models work with 227x227 image input, while VGG, ResNet, GoogL
 
 * Please install [PyTorch](http://pytorch.org/) and [Torchvision](https://github.com/pytorch/vision) first. You can configure `settings.py` to load your own model, or change the default parameters.
 
-* Run NetDissect 
+* Run NetDissect
 
 ```
     python main.py
@@ -44,3 +44,5 @@ If you find the codes useful, please cite this paper
   year={2017}
 }
 ```
+=======
+# NetDissect-Lite
