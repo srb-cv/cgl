@@ -47,6 +47,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate')
+parser.add_argument('--penalty', '--penalty-lambda-weight', default=0.0, type=float,
+                    metavar='PR', help='lambda penalty on the block norm regularizer')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
@@ -66,7 +68,7 @@ parser.add_argument('--gpu', default=0, type=int,
 
 
 best_prec1 = 0
-penalty_lambda_weight = 0
+
 
 def main():
     global args, best_prec1
@@ -187,14 +189,14 @@ def train(train_loader, model, criterion, optimizer, epoch):
         output = model(input)
         criterion_loss = criterion(output, target)
 
-        if penalty_lambda_weight == 0:
+        if args.penalty == 0:
             weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
             loss = criterion_loss + weight_reg
         else:
             # print("Applying Block Norm Regularization")
             # compute the conv regularizers
             regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-            weight_reg = regulrizer_init + regularize_conv_layers(model, penalty_lambda_weight)
+            weight_reg = regulrizer_init + regularize_conv_layers(model, args.penalty)
             weight_reg = weight_reg.cuda()
             loss = criterion_loss + weight_reg
 
@@ -258,13 +260,13 @@ def validate(val_loader, model, criterion, epoch):
             output = model(input)
             criterion_loss = criterion(output, target)
 
-            if penalty_lambda_weight == 0:
+            if args.penalty == 0:
                 weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
                 loss = criterion_loss + weight_reg
             else:
                 # compute the conv regularizers
                 regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-                weight_reg = regulrizer_init + regularize_conv_layers(model, penalty_lambda_weight)
+                weight_reg = regulrizer_init + regularize_conv_layers(model, args.penalty)
                 loss = criterion_loss + weight_reg
 
             # measure accuracy and record loss
