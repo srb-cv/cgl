@@ -254,8 +254,8 @@ def validate(val_loader, model, criterion, epoch):
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
             if args.gpu is not None:
-                input = input.cuda(0, non_blocking= True)
-            target = target.cuda(0, non_blocking= True)
+                input = input.cuda(args.gpu, non_blocking= True)
+            target = target.cuda(args.gpu, non_blocking= True)
 
             # compute output
             output = model(input)
