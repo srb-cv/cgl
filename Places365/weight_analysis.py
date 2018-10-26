@@ -6,7 +6,7 @@ import math
 model = models.AlexNet(num_classes=30)
 model.features = torch.nn.DataParallel(model.features)
 
-model_dict_data = torch.load('../zoo/self_trained/places_30_zoo/05_oct17_30_mit_reg1e-3_no_wd_lr0.01/alexnet_best.pth.tar')
+model_dict_data = torch.load('../zoo/self_trained/places_30_zoo/06_oct19_30_mit_reg1e-2_no_wd_lr0.01/alexnet_best.pth.tar')
 #print(model_dict_data)
 model.load_state_dict(model_dict_data['state_dict'])
 model.eval()
@@ -24,7 +24,7 @@ def regularize_tensor_groups(conv_weight_params, number_of_groups = 5, group_nor
     tensor_groups = conv_weight_params.unfold(0, neurons_per_group, neurons_per_group) # tested for convs only
     group_norm_data = [tensor_groups[i].norm(group_norm) for i in range(number_of_groups)]
 
-    print([x.data.cpu() for x in group_norm_data])
+    print([round(x.data.item(),2) for x in group_norm_data])
 
     group_norm_tensor = torch.stack(group_norm_data, 0)
     layer_norm_data = group_norm_tensor.norm(layer_norm)

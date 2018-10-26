@@ -106,6 +106,7 @@ def main():
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
+            #print("=> loaded optimizer parameter", optimizer.param_groups )
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
