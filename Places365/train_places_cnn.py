@@ -57,6 +57,8 @@ parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
+parser.add_argument('--save', default='', type=str, metavar='PATH',
+                    help='path where model file is to be saved (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_false',
@@ -303,9 +305,20 @@ def validate(val_loader, model, criterion, epoch):
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    torch.save(state, filename + '_latest.pth.tar')
+    if args.save:
+        if os.path.isdir(args.save):
+            torch.save(state, os.path.join(args.save, filename+'_latest.pth.tar'))
+        else:
+            print("Invalid Save Directory")
+            exit(0)
+    else:
+        torch.save(state, filename+'_latest.pth.tar')
     if is_best:
-        shutil.copyfile(filename + '_latest.pth.tar', filename + '_best.pth.tar')
+        if args.save:
+            shutil.copyfile(os.path.join(args.save,filename + '_latest.pth.tar'),
+                            os.path.join(args.save,filename + '_best.pth.tar'))
+        else:
+            shutil.copyfile(filename + '_latest.pth.tar', filename + '_best.pth.tar')
 
 
 class AverageMeter(object):
