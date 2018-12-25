@@ -62,18 +62,25 @@ class Alexnet_module(nn.Module):
         self.dropout = nn.Dropout()
 
     def forward(self, x):
-        x = F.max_pool2d(F.relu(self.conv1(x), inplace=True), kernel_size=3, stride=2)
-        x = F.max_pool2d(F.relu(self.conv2(x), inplace=True), kernel_size=3, stride=2)
-        x = F.relu(self.conv3(x), inplace=True)
-        x = F.relu(self.conv4(x), inplace=True)
-        x = F.max_pool2d(F.relu(self.conv5(x), inplace=True), kernel_size=3, stride=2)
+        x_conv1 = self.conv1(x)
+        x = F.max_pool2d(F.relu(x_conv1, inplace=True), kernel_size=3, stride=2)
+        x_conv2 = self.conv2(x)
+        x = F.max_pool2d(F.relu(x_conv2, inplace=True), kernel_size=3, stride=2)
+        x_conv3 = self.conv3(x)
+        x = F.relu(x_conv3, inplace=True)
+        x_conv4 = self.conv4(x)
+        x = F.relu(x_conv4, inplace=True)
+        x_conv5 = self.conv5(x)
+        x = F.max_pool2d(F.relu(x_conv5, inplace=True), kernel_size=3, stride=2)
         x = x.view(x.size(0), 256 * 6* 6)
         x = self.dropout(x)
         x = F.relu(self.fc1(x), inplace=True)
         x = self.dropout(x)
         x = F.relu(self.fc2(x), inplace=True)
         x = self.fc3(x)
-        return x
+        #conv_features = [x_conv1, x_conv2, x_conv3, x_conv4, x_conv5]
+        conv_features = [x_conv5]
+        return x, conv_features
 
 
 class Alexnet_module_bn(nn.Module):

@@ -1,12 +1,13 @@
 import torch
 import torchvision.models as models
 import math
+from model import alexnet
 
+#model = models.AlexNet(num_classes=365)
+model = alexnet.Alexnet_module_bn(num_classes=365)
+model = torch.nn.DataParallel(model)
 
-model = models.AlexNet(num_classes=30)
-model.features = torch.nn.DataParallel(model.features)
-
-model_dict_data = torch.load('../zoo/self_trained/places_30_zoo/06_oct19_30_mit_reg1e-2_no_wd_lr0.01/alexnet_best.pth.tar')
+model_dict_data = torch.load('../zoo/self_trained/l1.33_2_penalty0.01_batch256_lr0.01_modular_bn/alexnet_best.pth.tar')
 #print(model_dict_data)
 model.load_state_dict(model_dict_data['state_dict'])
 model.eval()
@@ -42,11 +43,11 @@ def regularize_tensor_groups(conv_weight_params, number_of_groups = 5, group_nor
 
 
 def get_regularizer_conv_layers(model):
-    weight_param_conv5 = dict(model.state_dict())['features.module.10.weight'] # conv5
-    weight_param_conv4 = dict(model.state_dict())['features.module.8.weight']  # conv4
-    weight_param_conv3 = dict(model.state_dict())['features.module.6.weight']  # conv3
-    weight_param_conv2 = dict(model.state_dict())['features.module.3.weight']  #conv2
-    weight_param_conv1 = dict(model.state_dict())['features.module.0.weight']  #conv1
+    weight_param_conv5 = dict(model.state_dict())['module.conv5.weight'] # conv5
+    weight_param_conv4 = dict(model.state_dict())['module.conv4.weight']  # conv4
+    weight_param_conv3 = dict(model.state_dict())['module.conv3.weight']  # conv3
+    weight_param_conv2 = dict(model.state_dict())['module.conv2.weight']  #conv2
+    weight_param_conv1 = dict(model.state_dict())['module.conv1.weight']  #conv1
 
     regularizer_term_conv5 = regularize_tensor_groups(weight_param_conv5).cuda()
     regularizer_term_conv4 = regularize_tensor_groups(weight_param_conv4).cuda()
