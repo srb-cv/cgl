@@ -42,7 +42,7 @@ parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
                         ' | '.join(model_names) +
                         ' (default: resnet18)')
 parser.add_argument('-j', '--workers', default=6, type=int, metavar='N',
-                    help='number of data loading workers (default: 4)')
+                    help='number of data loading workers (default: 6)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -58,7 +58,7 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
 parser.add_argument('--activation-penalty', '--ap', default=1e-5, type=float,
-                    metavar='A', help='penalty fdr activation Regularizer (default: 1e-4)')
+                    metavar='A', help='penalty fdr activation Regularizer (default: 1e-5)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -204,7 +204,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
 
         if args.penalty == 0:
             weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
-            loss = criterion_loss + weight_reg
+            # loss = criterion_loss + weight_reg
         else:
             # print("Applying Block Norm Regularization")
             # compute the conv regularizers
@@ -212,6 +212,10 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty)
             weight_reg = weight_reg.cuda()
 
+        if args.activation_penalty == 0:
+            activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
+
+        else:
             ### Preparing for activation norms
             act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
             receptive_field = receptive_fields.SoftReceptiveField()
@@ -221,8 +225,9 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(conv_features[0])
             activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
             # print(activation_reg)
+            # activation_reg = torch.tensor(0.0).cuda()
 
-            loss = criterion_loss + weight_reg + activation_reg
+        loss = criterion_loss + weight_reg + activation_reg
 
 
 
@@ -336,14 +341,18 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
         if os.path.isdir(args.save):
             torch.save(state, os.path.join(args.save, filename+'_latest.pth.tar'))
         else:
-            print("Invalid Save Directory")
-            exit(0)
+            print("Invalid Save Directory,\n Saving model in the working Directory")
+            torch.save(state, filename + '_latest.pth.tar')
     else:
         torch.save(state, filename+'_latest.pth.tar')
     if is_best:
         if args.save:
-            shutil.copyfile(os.path.join(args.save,filename + '_latest.pth.tar'),
-                            os.path.join(args.save,filename + '_best.pth.tar'))
+            if os.path.isdir(args.save):
+                shutil.copyfile(os.path.join(args.save,filename + '_latest.pth.tar'),
+                                os.path.join(args.save,filename + '_best.pth.tar'))
+            else:
+                print("Invalid Save Directory, \n Saving model in the current working directory")
+                shutil.copyfile(filename + '_latest.pth.tar', filename + '_best.pth.tar')
         else:
             shutil.copyfile(filename + '_latest.pth.tar', filename + '_best.pth.tar')
 
