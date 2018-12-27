@@ -2,12 +2,20 @@ import torch
 import torchvision.models as models
 import math
 from model import alexnet
+import argparse
 
 #model = models.AlexNet(num_classes=365)
 model = alexnet.Alexnet_module_bn(num_classes=365)
 model = torch.nn.DataParallel(model)
 
-model_dict_data = torch.load('../zoo/self_trained/l1.33_2_penalty0.01_batch256_lr0.01_modular_bn/alexnet_best.pth.tar')
+parser = argparse.ArgumentParser(description='Weight Analysis')
+parser.add_argument('model_path', metavar='DIR',
+                    help='path to tained model')
+
+args = parser.parse_args()#
+print(args)
+model_path = args.model_path
+model_dict_data = torch.load(model_path)
 #print(model_dict_data)
 model.load_state_dict(model_dict_data['state_dict'])
 model.eval()
@@ -43,7 +51,7 @@ def regularize_tensor_groups(conv_weight_params, number_of_groups = 5, group_nor
 
 
 def get_regularizer_conv_layers(model):
-    weight_param_conv5 = dict(model.state_dict())['module.conv5.weight'] # conv5
+    weight_param_conv5 = dict(model.state_dict())['module.conv5.weight']  # conv5
     weight_param_conv4 = dict(model.state_dict())['module.conv4.weight']  # conv4
     weight_param_conv3 = dict(model.state_dict())['module.conv3.weight']  # conv3
     weight_param_conv2 = dict(model.state_dict())['module.conv2.weight']  #conv2
