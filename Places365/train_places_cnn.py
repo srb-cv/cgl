@@ -41,8 +41,8 @@ parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
                     help='model architecture: ' +
                         ' | '.join(model_names) +
                         ' (default: resnet18)')
-parser.add_argument('-j', '--workers', default=6, type=int, metavar='N',
-                    help='number of data loading workers (default: 6)')
+parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                    help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -57,7 +57,7 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
-parser.add_argument('--activation-penalty', '--ap', default=1e-5, type=float,
+parser.add_argument('--activation-penalty', '--ap', default=1e-4, type=float,
                     metavar='A', help='penalty fdr activation Regularizer (default: 1e-5)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
@@ -246,6 +246,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         # Display on tensorboard
         writer.add_scalar('train/loss', loss.item(), i)
         writer.add_scalar('train/reg_term', weight_reg.item(), i)
+        writer.add_scalar('train/act_term', activation_reg.item(), i)
         writer.add_scalar('train/prec1', prec1[0], i)
         writer.add_scalar('train/prec5', prec5[0], i)
 
@@ -280,6 +281,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
     top1 = AverageMeter()
     top5 = AverageMeter()
     reg_losses = AverageMeter()
+    activation_norm = AverageMeter()
 
 
     # switch to evaluate mode
@@ -292,17 +294,32 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             target = target.cuda(args.gpu, non_blocking= True)
 
             # compute output
-            output,_ = model(input)
+            output, conv_features = model(input)
             criterion_loss = criterion(output, target)
 
             if args.penalty == 0:
                 weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
-                loss = criterion_loss + weight_reg
+                # loss = criterion_loss + weight_reg
             else:
                 # compute the conv regularizers
                 regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
                 weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty, eval=True)
-                loss = criterion_loss + weight_reg
+                # loss = criterion_loss + weight_reg
+
+            if args.activation_penalty == 0:
+                activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
+
+            else:
+                ### Preparing for activation norms
+                act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+                receptive_field = receptive_fields.SoftReceptiveField()
+                soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(conv_features[0])
+                assert (soft_receptive_fields.size() == conv_features[0].size())
+
+                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(conv_features[0])
+                activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
+
+            loss = criterion_loss + weight_reg + activation_reg
 
             # measure accuracy and record loss
             prec1, prec5 = accuracy(output, target, topk=(1, 5))
@@ -310,6 +327,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             reg_losses.update(weight_reg.item(), input.size(0))
             top1.update(prec1[0], input.size(0))
             top5.update(prec5[0], input.size(0))
+            activation_norm.update(activation_reg.item(), input.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -320,17 +338,20 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                       'Reg_term {weight_reg.val:.4f} ({weight_reg.avg:.4f})\t'
+                      'Activation_reg {activation_reg.val:.4f} ({activation_reg.avg:.4f})\t'
                       'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                       'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, loss=losses, weight_reg=reg_losses,
-                       top1=top1, top5=top5))
+                       activation_reg=activation_norm, top1=top1, top5=top5))
 
         print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
+
         # Display on tensorboard
         writer.add_scalar('val/loss', losses.avg, epoch)
         writer.add_scalar('val/reg_term', reg_losses.avg, epoch)
+        writer.add_scalar('train/act_term', activation_norm.avg, epoch)
         writer.add_scalar('val/prec1', top1.avg, epoch)
         writer.add_scalar('train/prec5', top5.avg, epoch)
     return top1.avg
