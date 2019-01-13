@@ -109,14 +109,14 @@ class Alexnet_module_bn(nn.Module):
         x = self.conv2(x)
         x = self.bn2(x)
         x = F.max_pool2d(F.relu(x), kernel_size=3, stride=2)
-        x = self.conv3(x)
-        x = self.bn3(x)
+        x_conv3 = self.conv3(x)
+        x = self.bn3(x_conv3)
         x = F.relu(x)
-        x = self.conv4(x)
-        x = self.bn4(x)
+        x_conv4 = self.conv4(x)
+        x = self.bn4(x_conv4)
         x = F.relu(x)
-        x = self.conv5(x)
-        x = self.bn5(x)
+        x_conv5 = self.conv5(x)
+        x = self.bn5(x_conv5)
         x = F.max_pool2d(F.relu(x), kernel_size=3, stride=2)
         x = x.view(x.size(0), 256 * 6* 6)
         x = self.dropout(x)
@@ -124,7 +124,7 @@ class Alexnet_module_bn(nn.Module):
         x = self.dropout(x)
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return x
+        return x, [x_conv5]
 
 
 class AlexNet_bn(nn.Module):
