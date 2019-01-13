@@ -65,7 +65,7 @@ class FeatureOperator:
                 input = input.cuda()
             #input_var = V(input,volatile=True)
             with torch.no_grad():
-                logit = model.forward(input)
+                logit,_ = model.forward(input)
                 while np.isnan(logit.cpu().data.max()):
                     print("nan") #which I have no idea why it will happen
                     del features_blobs[:]

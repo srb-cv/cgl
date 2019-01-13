@@ -4,7 +4,7 @@ import torchvision
 import torch.nn as nn
 from model import alexnet
 
-use_alexnet_vision = True
+use_alexnet_vision = False
 
 def loadmodel(hook_fn):
     if settings.MODEL_FILE is None:

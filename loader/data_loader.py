@@ -147,7 +147,7 @@ class SegmentationData(AbstractSegmentation):
         if minlength is not None:
             length = max(minlength, length)
         result = np.zeros(arr.shape + (length,))
-        result[list(np.indices(arr.shape)) + [arr]] = 1
+        result[tuple(list(np.indices(arr.shape)) + [arr])] = 1
         return result
 
 
