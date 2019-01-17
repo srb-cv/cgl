@@ -22,6 +22,8 @@ import torch.nn.functional as F
 from model import alexnet
 from regularizer import block_norm
 from regularizer import receptive_fields
+from norm_analysis import inspect_act_norms
+
 
 from tensorboardX import SummaryWriter
 writer = SummaryWriter()
@@ -158,11 +160,16 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch)
 
+        # calculate activatuion norm
+        inspect_act_norms(train_loader, model, args)
+
         # train for one epoch
         train(train_loader, model, criterion, optimizer, regularizer, epoch)
 
         # evaluate on validation set
         prec1 = validate(val_loader, model, criterion, regularizer, epoch)
+
+
 
         # remember best prec@1 and save checkpoint
         is_best = prec1 > best_prec1
@@ -316,7 +323,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(conv_features[0])
                 assert (soft_receptive_fields.size() == conv_features[0].size())
 
-                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(conv_features[0])
+                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(soft_receptive_fields)
                 activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
 
             loss = criterion_loss + weight_reg + activation_reg
