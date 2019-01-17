@@ -229,7 +229,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(conv_features[0])
             assert (soft_receptive_fields.size() == conv_features[0].size())
 
-            groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(conv_features[0])
+            groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(soft_receptive_fields)
             activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
             # print(activation_reg)
             # activation_reg = torch.tensor(0.0).cuda()
