@@ -1,6 +1,6 @@
 import torch
 import math
-
+import numpy as np
 
 class RegularizeConvNetwork:
     def __init__(self, number_of_groups=5, group_norm=2,
@@ -79,15 +79,16 @@ class RegularizeConvNetwork:
                 number_of_maps = current_map_set.size(0)
                 size_of_map = current_map_set.size(1) * current_map_set.size(2)
                 map_per_row_view = current_map_set.contiguous().view(number_of_maps, -1)       # shape: (Batches*Channels) X (Height * Width)
-                first_map_row_view =  current_map_set[0].view(-1, size_of_map)              # shape: 1 X (Height * Width)
-                difference_tensor = torch.sub(map_per_row_view, first_map_row_view)
+                random_map_index = np.random.randint(number_of_maps)
+                random_map_row_view =  current_map_set[random_map_index].view(-1, size_of_map)              # shape: 1 X (Height * Width)
+                difference_tensor = torch.sub(map_per_row_view, random_map_row_view)
                 numerator_tensor = difference_tensor.norm(1, dim=1)
-                denominator_tensor = torch.add(map_per_row_view.norm(1, dim=1), first_map_row_view.norm(1))
-                denominator_tensor = torch.add(denominator_tensor, self.epsilon)
-                value_tensor = torch.div(numerator_tensor, denominator_tensor).norm(1)
+                denominator_tensor = torch.add(map_per_row_view.norm(1, dim=1), random_map_row_view.norm(1))
+                denominator_tensor = torch.add(denominator_tensor, numerator_tensor)
+                value_tensor = torch.div(numerator_tensor * 2, denominator_tensor).norm(1)
                 # print(value_tensor.norm(1))
                 current_norm = current_norm + value_tensor
-            groupwise_activation_norms[i] = current_norm
+            groupwise_activation_norms[i] = torch.div(current_norm, batch_size)
         return groupwise_activation_norms
 
     def regularize_activation_groups_within_layer_full_tester(self, feature_maps, layer_penalty=0):
