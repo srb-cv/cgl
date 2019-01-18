@@ -90,7 +90,8 @@ def main():
         # a customized resnet model with last feature map size as 14x14 for better class activation mapping
         model  = wideresnet.resnet50(num_classes=args.num_classes)
     elif args.arch.lower().startswith('alexnet'):
-        model  = alexnet.Alexnet_module(num_classes=args.num_classes)
+        model  = alexnet.Alexnet_module_bn(num_classes=args.num_classes)
+        args.batch_norm_flag = True
         regularizer = block_norm.RegularizeConvNetwork()
     else:
         model = models.__dict__[args.arch](num_classes=args.num_classes)
@@ -160,8 +161,8 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch)
 
-        # calculate activatuion norm
-        inspect_act_norms(train_loader, model, args)
+        # # calculate activatuion norm
+        # inspect_act_norms(train_loader, model, args)
 
         # train for one epoch
         train(train_loader, model, criterion, optimizer, regularizer, epoch)
@@ -226,7 +227,17 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             ### Preparing for activation norms
             act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
             receptive_field = receptive_fields.SoftReceptiveField()
-            soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(conv_features[0])
+
+            if args.batch_norm_flag:
+                soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
+                    conv_features[0])
+
+            else:
+                soft_receptive_fields = receptive_field. \
+                    calculate_receptive_field_layer_batch_norm(conv_features[0],
+                                                               model.module.bn5.running_mean,
+                                                               model.module.bn5.running_var)
+
             assert (soft_receptive_fields.size() == conv_features[0].size())
 
             groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(soft_receptive_fields)
@@ -320,10 +331,21 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 ### Preparing for activation norms
                 act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
                 receptive_field = receptive_fields.SoftReceptiveField()
-                soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(conv_features[0])
+
+                if args.batch_norm_flag:
+                    soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
+                        conv_features[0])
+
+                else:
+                    soft_receptive_fields = receptive_field.\
+                        calculate_receptive_field_layer_batch_norm(conv_features[0],
+                                                                   model.module.bn5.running_mean,
+                                                                   model.module.bn5.running_var)
+
                 assert (soft_receptive_fields.size() == conv_features[0].size())
 
-                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(soft_receptive_fields)
+                groupwise_activation_norm = regularizer.\
+                    regularize_activation_groups_within_layer_full(soft_receptive_fields)
                 activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
 
             loss = criterion_loss + weight_reg + activation_reg
