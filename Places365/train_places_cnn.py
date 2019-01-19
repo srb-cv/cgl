@@ -228,7 +228,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
             receptive_field = receptive_fields.SoftReceptiveField()
 
-            if args.batch_norm_flag:
+            if args.batch_norm_flag==False:
                 soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
                     conv_features[0])
 
@@ -332,7 +332,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
                 receptive_field = receptive_fields.SoftReceptiveField()
 
-                if args.batch_norm_flag:
+                if args.batch_norm_flag==False:
                     soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
                         conv_features[0])
 
