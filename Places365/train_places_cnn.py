@@ -22,7 +22,7 @@ import torch.nn.functional as F
 from model import alexnet
 from regularizer import block_norm
 from regularizer import receptive_fields
-from norm_analysis import inspect_act_norms
+# from norm_analysis import inspect_act_norms
 
 
 from tensorboardX import SummaryWriter
@@ -160,8 +160,8 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch)
 
-        # calculate activatuion norm
-        inspect_act_norms(train_loader, model, args)
+        # # calculate activatuion norm
+        # inspect_act_norms(train_loader, model, args)
 
         # train for one epoch
         train(train_loader, model, criterion, optimizer, regularizer, epoch)
@@ -358,9 +358,9 @@ def validate(val_loader, model, criterion, regularizer, epoch):
         # Display on tensorboard
         writer.add_scalar('val/loss', losses.avg, epoch)
         writer.add_scalar('val/reg_term', reg_losses.avg, epoch)
-        writer.add_scalar('train/act_term', activation_norm.avg, epoch)
+        writer.add_scalar('val/act_term', activation_norm.avg, epoch)
         writer.add_scalar('val/prec1', top1.avg, epoch)
-        writer.add_scalar('train/prec5', top5.avg, epoch)
+        writer.add_scalar('val/prec5', top5.avg, epoch)
     return top1.avg
 
 

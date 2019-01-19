@@ -2,6 +2,7 @@ import torch
 import math
 import torch.nn.functional as F
 
+
 class SoftReceptiveField:
     def __init__(self, number_of_groups=5):
         self.linear_map_param_1 = torch.tensor(1.0, requires_grad=True).cuda()
@@ -30,6 +31,7 @@ class SoftReceptiveField:
     def calculate_receptive_field_layer_batch_norm(self, feature_maps, betas_per_map, gammas_per_map):
         bias_tensor = torch.div(betas_per_map, gammas_per_map)
         receptive_fields = feature_maps.transpose(1, 3).add(bias_tensor).transpose(1,3)
+        receptive_fields = torch.sigmoid(self.linear_map_param_1 * receptive_fields + self.linear_map_param_2)
         return receptive_fields
 
 
