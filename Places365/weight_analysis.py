@@ -5,7 +5,7 @@ from model import alexnet
 import argparse
 
 #model = models.AlexNet(num_classes=365)
-model = alexnet.Alexnet_module_bn(num_classes=365)
+model = alexnet.Alexnet_module(num_classes=50)
 model = torch.nn.DataParallel(model)
 
 parser = argparse.ArgumentParser(description='Weight Analysis')
@@ -57,11 +57,11 @@ def get_regularizer_conv_layers(model):
     weight_param_conv2 = dict(model.state_dict())['module.conv2.weight']  #conv2
     weight_param_conv1 = dict(model.state_dict())['module.conv1.weight']  #conv1
 
-    regularizer_term_conv5 = regularize_tensor_groups(weight_param_conv5).cuda()
-    regularizer_term_conv4 = regularize_tensor_groups(weight_param_conv4).cuda()
-    regularizer_term_conv3 = regularize_tensor_groups(weight_param_conv3).cuda()
-    regularizer_term_conv2 = regularize_tensor_groups(weight_param_conv2).cuda()
-    regularizer_term_conv1 = regularize_tensor_groups(weight_param_conv1).cuda()
+    regularize_tensor_groups(weight_param_conv1).cuda()
+    regularize_tensor_groups(weight_param_conv2).cuda()
+    regularize_tensor_groups(weight_param_conv3).cuda()
+    regularize_tensor_groups(weight_param_conv4).cuda()
+    regularize_tensor_groups(weight_param_conv5).cuda()
 
     # weight_reg = penalty * (regularizer_term_conv5 + \
     #              regularizer_term_conv4 + \
