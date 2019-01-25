@@ -7,7 +7,6 @@ import os
 import shutil
 import time
 
-import math
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -17,12 +16,11 @@ import torch.utils.data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
-import torch.nn.functional as F
 
 from model import alexnet
 from regularizer import block_norm
 from regularizer import receptive_fields
-# from norm_analysis import inspect_act_norms
+from regularizer.norm_analysis import inspect_act_norms
 
 
 from tensorboardX import SummaryWriter
@@ -30,7 +28,7 @@ writer = SummaryWriter()
 
 
 import wideresnet
-import pdb
+
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(models.__dict__[name]))
@@ -69,6 +67,8 @@ parser.add_argument('--save', default='', type=str, metavar='PATH',
                     help='path where model file is to be saved (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
+parser.add_argument('-bn', '--batchnorm', dest='batchnorm', action='store_true',
+                    help='applies batch norm activation norms')
 parser.add_argument('--pretrained', dest='pretrained', action='store_false',
                     help='use pre-trained model')
 parser.add_argument('--num_classes',default=365, type=int, help='num of class in the model')
@@ -90,8 +90,10 @@ def main():
         # a customized resnet model with last feature map size as 14x14 for better class activation mapping
         model  = wideresnet.resnet50(num_classes=args.num_classes)
     elif args.arch.lower().startswith('alexnet'):
-        model  = alexnet.Alexnet_module_bn(num_classes=args.num_classes)
-        args.batch_norm_flag = True
+        if args.batchnorm:
+            model = alexnet.Alexnet_module_bn(num_classes=args.num_classes)
+        else:
+            model  = alexnet.Alexnet_module(num_classes=args.num_classes)
         regularizer = block_norm.RegularizeConvNetwork()
     else:
         model = models.__dict__[args.arch](num_classes=args.num_classes)
@@ -228,15 +230,15 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
             receptive_field = receptive_fields.SoftReceptiveField()
 
-            if args.batch_norm_flag==False:
-                soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
-                    conv_features[0])
-
-            else:
-                soft_receptive_fields = receptive_field. \
+            if args.batchnorm:
+                soft_receptive_fields = receptive_field.\
                     calculate_receptive_field_layer_batch_norm(conv_features[0],
                                                                model.module.bn5.running_mean,
                                                                model.module.bn5.running_var)
+            else:
+                soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
+                    conv_features[0])
+
 
             assert (soft_receptive_fields.size() == conv_features[0].size())
 
@@ -332,15 +334,15 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
                 receptive_field = receptive_fields.SoftReceptiveField()
 
-                if args.batch_norm_flag==False:
-                    soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
-                        conv_features[0])
-
-                else:
-                    soft_receptive_fields = receptive_field.\
+                if args.batchnorm:
+                    soft_receptive_fields = receptive_field. \
                         calculate_receptive_field_layer_batch_norm(conv_features[0],
                                                                    model.module.bn5.running_mean,
                                                                    model.module.bn5.running_var)
+                else:
+                    soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
+                        conv_features[0])
+
 
                 assert (soft_receptive_fields.size() == conv_features[0].size())
 

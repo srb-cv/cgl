@@ -112,7 +112,7 @@ def main():
     return
 
 
-def inspect_act_norms(train_loader, model):
+def inspect_act_norms(train_loader, model, args):
     batch_time = AverageMeter()
     difference_scores = AverageMeter()
 
@@ -134,7 +134,7 @@ def inspect_act_norms(train_loader, model):
             soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(conv_features[0])
             assert (soft_receptive_fields.size() == conv_features[0].size())
 
-            difference_score = mixed_version_measure(unit_x, unit_y, soft_receptive_fields)
+            difference_score = purely_diff_based_measure(unit_x, unit_y, soft_receptive_fields)
             difference_score = torch.stack(difference_score)
 
             difference_scores.update(difference_score, len(difference_score))
