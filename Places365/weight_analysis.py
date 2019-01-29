@@ -4,16 +4,21 @@ import math
 from model import alexnet
 import argparse
 
-#model = models.AlexNet(num_classes=365)
-model = alexnet.Alexnet_module(num_classes=50)
-model = torch.nn.DataParallel(model)
-
 parser = argparse.ArgumentParser(description='Weight Analysis')
 parser.add_argument('model_path', metavar='DIR',
                     help='path to tained model')
-
-args = parser.parse_args()#
+parser.add_argument('-bn', '--batchnorm', dest='batchnorm', action='store_true',
+                    help='applies batch norm activation norms')
+args = parser.parse_args()
 print(args)
+
+if args.batchnorm:
+    model = alexnet.Alexnet_module_bn(num_classes=50)
+else:
+    model = alexnet.Alexnet_module(num_classes=50)
+
+model = torch.nn.DataParallel(model)
+
 model_path = args.model_path
 model_dict_data = torch.load(model_path)
 #print(model_dict_data)
