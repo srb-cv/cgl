@@ -49,6 +49,8 @@ parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
+parser.add_argument('--groups', default=5, type=int,
+                    metavar='N', help='number of semantic groups (default: 5)')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate')
 parser.add_argument('--penalty', '--penalty-lambda-weight', default=0.0, type=float,
@@ -94,7 +96,7 @@ def main():
             model = alexnet.Alexnet_module_bn(num_classes=args.num_classes)
         else:
             model  = alexnet.Alexnet_module(num_classes=args.num_classes)
-        regularizer = block_norm.RegularizeConvNetwork()
+        regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
     else:
         model = models.__dict__[args.arch](num_classes=args.num_classes)
 
@@ -228,7 +230,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         else:
             ### Preparing for activation norms
             act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-            receptive_field = receptive_fields.SoftReceptiveField()
+            receptive_field = receptive_fields.SoftReceptiveField(number_of_groups=args.groups)
 
             if args.batchnorm:
                 soft_receptive_fields = receptive_field.\
