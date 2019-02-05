@@ -244,7 +244,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
 
             assert (soft_receptive_fields.size() == conv_features[0].size())
 
-            groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_full(soft_receptive_fields)
+            groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v2(soft_receptive_fields)
             activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
             # print(activation_reg)
             # activation_reg = torch.tensor(0.0).cuda()
@@ -349,7 +349,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 assert (soft_receptive_fields.size() == conv_features[0].size())
 
                 groupwise_activation_norm = regularizer.\
-                    regularize_activation_groups_within_layer_full(soft_receptive_fields)
+                    regularize_activation_groups_within_layer_batch_wise_v2(soft_receptive_fields)
                 activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
 
             loss = criterion_loss + weight_reg + activation_reg

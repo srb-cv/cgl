@@ -78,7 +78,7 @@ class RegularizeConvNetwork:
                 current_map_set = current_group[j]
                 number_of_maps = current_map_set.size(0)
                 size_of_map = current_map_set.size(1) * current_map_set.size(2)
-                map_per_row_view = current_map_set.contiguous().view(number_of_maps, -1)       # shape: (Batches*Channels) X (Height * Width)
+                map_per_row_view = current_map_set.contiguous().view(number_of_maps, -1)       # shape: (Channels) X (Height * Width)
                 random_map_index = np.random.randint(number_of_maps)
                 random_map_row_view =  current_map_set[random_map_index].view(-1, size_of_map)              # shape: 1 X (Height * Width)
                 difference_tensor = torch.sub(map_per_row_view, random_map_row_view)
@@ -91,29 +91,63 @@ class RegularizeConvNetwork:
             groupwise_activation_norms[i] = torch.div(current_norm, batch_size)
         return groupwise_activation_norms
 
-    def regularize_activation_groups_within_layer_full_tester(self, feature_maps, layer_penalty=0):
-        batch_size = feature_maps.size(0)
+    def regularize_activation_groups_within_layer_batch_wise(self, feature_maps, layer_penalty=0):
+        # First map of a random neuron in compared to all the maps
         maps_per_group = int(len(feature_maps[1])/ self.number_of_groups)
         activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
         activation_groups = list(activation_groups)
         input = torch.empty(self.number_of_groups)
         groupwise_activation_norms = torch.zeros_like(input).cuda()
+
         for i in range(0, self.number_of_groups):
             current_group = activation_groups[i]
-            #current_norm = torch.zeros(1).cuda()
-            #for j in range(0, batch_size):
-            #current_group = current_group[j]
-            number_of_maps = current_group.size(0) * current_group.size(1)
-            size_of_map = current_group.size(2) * current_group.size(3)
-            map_per_row_view = current_group.contiguous().view(number_of_maps, -1)       # shape: (Batches*Channels) X (Height * Width)
-            first_map_row_view =  current_group[0][0].view(-1, size_of_map)              # shape: 1 X (Height * Width)
-            difference_tensor = torch.sub(map_per_row_view, first_map_row_view)
-            numerator_tensor = difference_tensor.norm(1, dim=1)
-            denominator_tensor = torch.add(map_per_row_view.norm(1, dim=1), first_map_row_view.norm(1))
-            value_tensor = torch.div(numerator_tensor, denominator_tensor).norm(1)
-            #current_norm = current_norm + value_tensor
-            groupwise_activation_norms[i] = value_tensor
+            batch_size = current_group.shape[0]
+            current_group = current_group.contiguous().view(-1, current_group.shape[2] * current_group.shape[3])
+            random_map_index = np.random.randint(current_group.shape[0])
+            random_filter_maps = current_group[random_map_index, :]
+            difference_tensor = torch.sub(current_group, random_filter_maps)
+            num_tensor_norm = difference_tensor.norm(1, dim=1)
+            denom_tensor_part = torch.add(random_filter_maps.norm(1), current_group.norm(1, dim=1))
+            denom_tensor_norm = torch.add(denom_tensor_part, num_tensor_norm)
+            iou_map_wise = torch.div(num_tensor_norm * 2, denom_tensor_norm)
+            groupwise_activation_norms[i] = torch.div(iou_map_wise.norm(1), batch_size)
+
         return groupwise_activation_norms
+
+    def regularize_activation_groups_within_layer_batch_wise_v2(self, feature_maps, layer_penalty=0):
+        # all maps for a neuron across batch is compared and  not only a single one
+        maps_per_group = int(len(feature_maps[1]) / self.number_of_groups)
+        activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
+        activation_groups = list(activation_groups)
+        input = torch.empty(2)
+        groupwise_activation_norms = torch.zeros_like(input).cuda()
+
+        for i in range(0, 2):
+            current_group = activation_groups[i]
+            batch_size = current_group.shape[0]
+            random_map_index = np.random.randint(current_group.shape[1])
+            random_filter_maps = current_group[:, random_map_index, :].unsqueeze(1)
+            difference_tensor = torch.sub(current_group, random_filter_maps)
+            difference_tensor = difference_tensor.contiguous().view(-1,
+                                                                    difference_tensor.shape[2] *
+                                                                    difference_tensor.shape[3])
+            num_tensor_norm = difference_tensor.norm(1, dim=1)
+            first_filter_map_view = random_filter_maps.view(random_filter_maps.shape[0], random_filter_maps.shape[1],
+                                                           random_filter_maps.shape[2] * random_filter_maps.shape[3])
+            first_filter_map_norms = first_filter_map_view.norm(1, dim=2)
+            current_group_view = current_group.view(current_group.shape[0], current_group.shape[1],
+                                                    current_group.shape[2] * current_group.shape[3])
+            current_group_norms = current_group_view.norm(1, dim=2)
+            denom_tensor_part = torch.add(first_filter_map_norms, current_group_norms)
+            denom_tensor_part_view = denom_tensor_part.view(-1)
+            denom_tensor_norm = torch.add(denom_tensor_part_view,
+                                          num_tensor_norm)
+            iou_map_wise = torch.div(2 * num_tensor_norm, denom_tensor_norm)
+            groupwise_activation_norms[i] = torch.div(iou_map_wise.norm(1), batch_size)
+
+        return groupwise_activation_norms
+
+
 
     def regularize_activation_groups_in_adjacent_layers(self, feature_maps, layer_penalty):
         #assert(len(feature_maps)==2)
