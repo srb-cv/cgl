@@ -1,6 +1,7 @@
 import torch
 import math
 import numpy as np
+import random
 
 class RegularizeConvNetwork:
     def __init__(self, number_of_groups=5, group_norm=2,
@@ -119,10 +120,10 @@ class RegularizeConvNetwork:
         maps_per_group = int(len(feature_maps[1]) / self.number_of_groups)
         activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
         activation_groups = list(activation_groups)
-        input = torch.empty(2)
+        input = torch.empty(self.number_of_groups)
         groupwise_activation_norms = torch.zeros_like(input).cuda()
 
-        for i in range(0, 2):
+        for i in range(0, self.number_of_groups):
             current_group = activation_groups[i]
             batch_size = current_group.shape[0]
             random_map_index = np.random.randint(current_group.shape[1])
@@ -146,6 +147,48 @@ class RegularizeConvNetwork:
             groupwise_activation_norms[i] = torch.div(iou_map_wise.norm(1), batch_size)
 
         return groupwise_activation_norms
+
+
+    def regularize_activation_groups_within_layer_batch_wise_v3(self, feature_maps, layer_penalty=0):
+        # Random N pair of neurons are compared batch-wise
+        maps_per_group = int(len(feature_maps[1]) / self.number_of_groups)
+        activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
+        activation_groups = list(activation_groups)
+        input = torch.empty(self.number_of_groups)
+        groupwise_activation_norms = torch.zeros_like(input).cuda()
+        num_random_pairs = 3 * self.number_of_groups
+
+        for i in range(0, self.number_of_groups):
+            current_group = activation_groups[i]
+            batch_size = current_group.shape[0]
+            num_of_filters = current_group.shape[1]
+            random_map_indices = random.sample(range(0, num_of_filters), num_random_pairs)
+            random_map_indices = torch.LongTensor(random_map_indices)
+            selected_pairs = torch.index_select(current_group, 1, random_map_indices)
+            selected_pair_groups = torch.split(selected_pairs, num_random_pairs // 2, dim=1)
+            selected_pair_groups = list(selected_pair_groups)
+            difference_tensor = torch.sub(selected_pair_groups[0], selected_pair_groups[1])
+            difference_tensor = difference_tensor.contiguous().view(-1,
+                                                                    difference_tensor.shape[2] *
+                                                                    difference_tensor.shape[3])
+            print(difference_tensor)
+            num_tensor_norm = difference_tensor.norm(1, dim=1)
+            selected_pair_groups[0] = selected_pair_groups[0].view(-1,
+                                                                   selected_pair_groups[0].shape[2] *
+                                                                   selected_pair_groups[0].shape[3])
+            selected_pair_groups[1] = selected_pair_groups[1].view(-1,
+                                                                   selected_pair_groups[1].shape[2] *
+                                                                   selected_pair_groups[1].shape[3])
+
+            denom_tensor_norm = torch.add(selected_pair_groups[0].norm(1, dim=1),
+                                          selected_pair_groups[1].norm(1, dim=1))
+
+            denom_tensor_norm = torch.add(denom_tensor_norm, num_tensor_norm)
+            iou_map_wise = torch.div(2 * num_tensor_norm, denom_tensor_norm)
+            iou_map_wise = torch.div(iou_map_wise, num_random_pairs)
+            groupwise_activation_norms[i] = torch.div(iou_map_wise.norm(1), batch_size)
+
+        print(groupwise_activation_norms)
 
 
 
