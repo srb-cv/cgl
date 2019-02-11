@@ -156,27 +156,29 @@ class RegularizeConvNetwork:
         activation_groups = list(activation_groups)
         input = torch.empty(self.number_of_groups)
         groupwise_activation_norms = torch.zeros_like(input).cuda()
-        num_random_pairs = 3 * self.number_of_groups
+        num_random_pairs = 50
 
         for i in range(0, self.number_of_groups):
             current_group = activation_groups[i]
             batch_size = current_group.shape[0]
             num_of_filters = current_group.shape[1]
             random_map_indices = random.sample(range(0, num_of_filters), num_random_pairs)
-            random_map_indices = torch.LongTensor(random_map_indices)
+            random_map_indices = torch.LongTensor(random_map_indices).cuda()
+            # print("random map indices",random_map_indices)
             selected_pairs = torch.index_select(current_group, 1, random_map_indices)
             selected_pair_groups = torch.split(selected_pairs, num_random_pairs // 2, dim=1)
             selected_pair_groups = list(selected_pair_groups)
+            # print([groups.shape for groups in selected_pair_groups])
             difference_tensor = torch.sub(selected_pair_groups[0], selected_pair_groups[1])
             difference_tensor = difference_tensor.contiguous().view(-1,
                                                                     difference_tensor.shape[2] *
                                                                     difference_tensor.shape[3])
-            print(difference_tensor)
+            #print(difference_tensor)
             num_tensor_norm = difference_tensor.norm(1, dim=1)
-            selected_pair_groups[0] = selected_pair_groups[0].view(-1,
+            selected_pair_groups[0] = selected_pair_groups[0].contiguous().view(-1,
                                                                    selected_pair_groups[0].shape[2] *
                                                                    selected_pair_groups[0].shape[3])
-            selected_pair_groups[1] = selected_pair_groups[1].view(-1,
+            selected_pair_groups[1] = selected_pair_groups[1].contiguous().view(-1,
                                                                    selected_pair_groups[1].shape[2] *
                                                                    selected_pair_groups[1].shape[3])
 
@@ -185,10 +187,10 @@ class RegularizeConvNetwork:
 
             denom_tensor_norm = torch.add(denom_tensor_norm, num_tensor_norm)
             iou_map_wise = torch.div(2 * num_tensor_norm, denom_tensor_norm)
-            iou_map_wise = torch.div(iou_map_wise, num_random_pairs)
+            iou_map_wise = torch.div(iou_map_wise, num_random_pairs//2)
             groupwise_activation_norms[i] = torch.div(iou_map_wise.norm(1), batch_size)
 
-        print(groupwise_activation_norms)
+        return groupwise_activation_norms
 
 
 
