@@ -29,6 +29,7 @@ class SoftReceptiveField:
         return feature_group_list
 
     def calculate_receptive_field_layer_batch_norm(self, feature_maps, betas_per_map, gammas_per_map):
+        gammas_per_map = torch.add(gammas_per_map, self.epsilon)
         bias_tensor = torch.div(betas_per_map, gammas_per_map)
         receptive_fields = feature_maps.transpose(1, 3).add(bias_tensor).transpose(1,3)
         receptive_fields = torch.sigmoid(self.linear_map_param_1 * receptive_fields + self.linear_map_param_2)
