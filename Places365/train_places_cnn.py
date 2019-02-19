@@ -59,8 +59,10 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
-parser.add_argument('--activation-penalty', '--ap', default=1e-4, type=float,
-                    metavar='A', help='penalty fdr activation Regularizer (default: 1e-5)')
+parser.add_argument('--activation-penalty', '--ap', default=0, type=float,
+                    metavar='A', help='penalty fdr activation Regularizer (default: 0)')
+parser.add_argument('--spatial-penalty', '--sp', default=0, type=float,
+                    metavar='S', help='penalty fdr R3 spatial activation Regularizer (default: 0)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -95,7 +97,7 @@ def main():
         if args.batchnorm:
             model = alexnet.Alexnet_module_bn(num_classes=args.num_classes)
         else:
-            model  = alexnet.Alexnet_module(num_classes=args.num_classes)
+            model = alexnet.Alexnet_module(num_classes=args.num_classes)
         regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
     else:
         model = models.__dict__[args.arch](num_classes=args.num_classes)
@@ -106,6 +108,12 @@ def main():
     else:
         model = torch.nn.DataParallel(model).cuda()
     print(model)
+    if args.penalty > 0:
+        print("***Applying R2: Group Sparsity Inducing Norm***")
+    if args.activation_penalty > 0:
+        print("***Applying R1: Group Activation Similarity Norm***")
+    if args.spatial_penalty > 0:
+        print("***Applying R3: Spatial Norm***")
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -196,6 +204,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
     top5 = AverageMeter()
     reg_losses = AverageMeter()
     activation_norm = AverageMeter()
+    spatial_norm = AverageMeter()
 
 
     # switch to train mode
@@ -224,12 +233,8 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty)
             weight_reg = weight_reg.cuda()
 
-        if args.activation_penalty == 0:
-            activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
 
-        else:
-            ### Preparing for activation norms
-            act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+        if args.activation_penalty !=0 or args.spatial_penalty !=0:
             receptive_field = receptive_fields.SoftReceptiveField(number_of_groups=args.groups)
 
             if args.batchnorm:
@@ -240,22 +245,30 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             else:
                 soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
                     conv_features[0])
-
-
             assert (soft_receptive_fields.size() == conv_features[0].size())
+
+
+        if args.activation_penalty == 0:
+            activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
+        else:
+            ### Preparing for activation norms
+            act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
 
             groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v2(soft_receptive_fields)
             activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
-            # print(activation_reg)
-            # activation_reg = torch.tensor(0.0).cuda()
 
-        loss = criterion_loss + weight_reg + activation_reg
+        if args.spatial_penalty == 0:
+            spatial_reg = torch.tensor(0.0, requires_grad=True).cuda()
+        else:
+            ### Prepare spatial norms
+            spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+            layer_spatial_norm = regularizer.regularize_activations_spatial_norm(soft_receptive_fields)
+            spatial_reg = spatial_regularizer_init + args.spatial_penalty * layer_spatial_norm
+            # print('Spatial Reg', spatial_reg)
+            # print('Act Norms', conv_features[0].norm(1))
+            #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
-
-
-
-
-
+        loss = criterion_loss + weight_reg + activation_reg + spatial_reg
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output, target, topk=(1, 5))
@@ -264,11 +277,13 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         top5.update(prec5[0], input.size(0))
         reg_losses.update(weight_reg.item(), input.size(0))
         activation_norm.update(activation_reg.item(), input.size(0))
+        spatial_norm.update(spatial_reg.item(), input.size(0))
 
         # Display on tensorboard
         writer.add_scalar('train/loss', loss.item(), i)
         writer.add_scalar('train/reg_term', weight_reg.item(), i)
         writer.add_scalar('train/act_term', activation_reg.item(), i)
+        writer.add_scalar('train/spatial_term', spatial_reg.item(), i)
         writer.add_scalar('train/prec1', prec1[0], i)
         writer.add_scalar('train/prec5', prec5[0], i)
 
@@ -288,13 +303,12 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                   'Reg_term {weight_reg.val:.4f} ({weight_reg.avg:.4f})\t'
                   'Activation_reg {activation_reg.val:.4f} ({activation_reg.avg:.4f})\t'
+                  'Spatial_reg {spatial_reg.val:.4f} ({spatial_reg.avg:.4f})\t'
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                    epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses,  weight_reg=reg_losses, activation_reg=activation_norm,
-                   top1=top1, top5=top5))
-
-
+                   spatial_reg=spatial_norm, top1=top1, top5=top5))
 
 
 def validate(val_loader, model, criterion, regularizer, epoch):
@@ -304,6 +318,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
     top5 = AverageMeter()
     reg_losses = AverageMeter()
     activation_norm = AverageMeter()
+    spatial_norm = AverageMeter()
 
 
     # switch to evaluate mode
@@ -328,13 +343,8 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty, eval=True)
                 # loss = criterion_loss + weight_reg
 
-            if args.activation_penalty == 0:
-                activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
-
-            else:
-                ### Preparing for activation norms
-                act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-                receptive_field = receptive_fields.SoftReceptiveField()
+            if args.activation_penalty != 0 or args.spatial_penalty != 0:
+                receptive_field = receptive_fields.SoftReceptiveField(number_of_groups=args.groups)
 
                 if args.batchnorm:
                     soft_receptive_fields = receptive_field. \
@@ -344,15 +354,28 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 else:
                     soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
                         conv_features[0])
-
-
                 assert (soft_receptive_fields.size() == conv_features[0].size())
 
-                groupwise_activation_norm = regularizer.\
-                    regularize_activation_groups_within_layer_batch_wise_v2(soft_receptive_fields)
+            if args.activation_penalty == 0:
+                activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
+            else:
+                # Preparing for activation norms
+                act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+
+                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v2(
+                    soft_receptive_fields)
                 activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
 
-            loss = criterion_loss + weight_reg + activation_reg
+            if args.spatial_penalty == 0:
+                spatial_reg = torch.tensor(0.0, requires_grad=True).cuda()
+            else:
+                # Prepare spatial norms
+                spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+                layer_spatial_norm = regularizer.regularize_activations_spatial_norm(soft_receptive_fields)
+                spatial_reg = spatial_regularizer_init + args.spatial_penalty * layer_spatial_norm
+                #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
+
+            loss = criterion_loss + weight_reg + activation_reg + spatial_reg
 
             # measure accuracy and record loss
             prec1, prec5 = accuracy(output, target, topk=(1, 5))
@@ -361,6 +384,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             top1.update(prec1[0], input.size(0))
             top5.update(prec5[0], input.size(0))
             activation_norm.update(activation_reg.item(), input.size(0))
+            spatial_norm.update(spatial_reg.item(), input.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -372,10 +396,11 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                       'Reg_term {weight_reg.val:.4f} ({weight_reg.avg:.4f})\t'
                       'Activation_reg {activation_reg.val:.4f} ({activation_reg.avg:.4f})\t'
+                      'Spatial_reg {spatial_reg.val:.4f} ({spatial_reg.avg:.4f})\t'
                       'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                       'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                        i, len(val_loader), batch_time=batch_time, loss=losses, weight_reg=reg_losses,
-                       activation_reg=activation_norm, top1=top1, top5=top5))
+                       activation_reg=activation_norm, spatial_reg=spatial_norm, top1=top1, top5=top5))
 
         print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
@@ -385,6 +410,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
         writer.add_scalar('val/loss', losses.avg, epoch)
         writer.add_scalar('val/reg_term', reg_losses.avg, epoch)
         writer.add_scalar('val/act_term', activation_norm.avg, epoch)
+        writer.add_scalar('val/spatial_term', spatial_norm.avg, epoch)
         writer.add_scalar('val/prec1', top1.avg, epoch)
         writer.add_scalar('val/prec5', top5.avg, epoch)
     return top1.avg
