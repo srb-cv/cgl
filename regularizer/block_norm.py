@@ -9,7 +9,7 @@ class RegularizeConvNetwork:
         self.number_of_groups = number_of_groups
         self.group_norm = group_norm
         self.layer_norm = layer_norm
-        self.epsilon = torch.tensor(1e-3, requires_grad=True).cuda()
+        self.epsilon = torch.tensor(1.0, requires_grad=True).cuda()
 
     def regularize_tensor_groups(self, conv_weight_params, eval=False):
         neurons_per_group = math.floor(conv_weight_params.shape[0] / self.number_of_groups)
@@ -193,6 +193,48 @@ class RegularizeConvNetwork:
             groupwise_activation_norms[i] = torch.div(iou_map_wise.norm(1), batch_size)
 
         return groupwise_activation_norms
+
+
+    def regularize_activations_spatial_norm(self, feature_maps):
+        # whole function at once activations pf size N x C x F_l x F_l
+        batch_size = feature_maps.shape[0]
+        indices = np.indices((feature_maps.shape[2], feature_maps.shape[3]))    # 2 x F_l x F_l
+        indices = torch.Tensor(indices).cuda()
+        x_coordinates = indices[1]                                              # F_l x F_l
+        y_coordinates = indices[0]                                              # F_l x F_l
+        feature_map_sums = torch.sum(feature_maps, (2, 3))                      # N x C
+        feature_map_sums = feature_map_sums.view(-1) # N * C
+        #print(feature_map_sums)
+
+        x_centers = torch.mul(x_coordinates, feature_maps)                      # N x C x F_l x F_l
+        x_centers = torch.sum(x_centers, (2, 3))                                # N x C
+        x_centers = x_centers.view(-1)                                          # N*C
+        x_centers = torch.div(x_centers, feature_map_sums+ self.epsilon)                      # N*C
+
+        y_centers = torch.mul(y_coordinates, feature_maps)
+        y_centers = torch.sum(y_centers, (2, 3))
+        y_centers = y_centers.view(-1)
+        y_centers = torch.div(y_centers, feature_map_sums+ self.epsilon)  # N*C
+
+        x_centers.unsqueeze_(1).unsqueeze_(1)
+        x_coordinates_expand = x_coordinates.expand(feature_maps.shape[0] * feature_maps.shape[1],
+                                                    feature_maps.shape[2], feature_maps.shape[3])
+        y_centers.unsqueeze_(1).unsqueeze_(1)
+        y_coordinates_expand = y_coordinates.expand(feature_maps.shape[0] * feature_maps.shape[1],
+                                                    feature_maps.shape[2], feature_maps.shape[3])
+
+        x_deviations = torch.sub(x_coordinates_expand, x_centers)
+        x_deviations = torch.pow(x_deviations, 2)
+        y_deviations = torch.sub(y_coordinates_expand, y_centers)
+        y_deviations = torch.pow(y_deviations, 2)  # N*C x F_l x F_l
+
+        num_part_1 = torch.pow(torch.add(x_deviations, y_deviations), 0.5)
+        activations = feature_maps.view(-1, feature_maps.shape[2], feature_maps.shape[3])  # N*C x F_l x F_l
+        num = torch.mul(activations, num_part_1)
+        num = torch.sum(num, (1, 2))  # N*C
+        score = torch.div(num, feature_map_sums + self.epsilon)
+        score = torch.div(score.sum(), batch_size * feature_maps.shape[1])  # 1
+        return score
 
 
 
