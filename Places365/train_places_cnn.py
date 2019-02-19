@@ -108,6 +108,8 @@ def main():
     else:
         model = torch.nn.DataParallel(model).cuda()
     print(model)
+    if args.weight_decay > 0:
+        print("***Applying Normal Weight Decay***")
     if args.penalty > 0:
         print("***Applying R2: Group Sparsity Inducing Norm***")
     if args.activation_penalty > 0:
