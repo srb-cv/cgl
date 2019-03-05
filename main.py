@@ -9,13 +9,16 @@ model = loadmodel(hook_feature)
 
 ############ STEP 1: feature extraction ###############
 features, maxfeature = fo.feature_extraction(model=model)
+print(len(features))
+print(len(maxfeature))
 
 for layer_id,layer in enumerate(settings.FEATURE_NAMES):
+    print("current layer id ", layer_id)
 ############ STEP 2: calculating threshold ############
-    thresholds = fo.quantile_threshold(features[layer_id],savepath="quantile.npy")
+    thresholds = fo.quantile_threshold(features[layer_id],savepath="quantile"+str(layer_id)+".npy")
 
 ############ STEP 3: calculating IoU scores ###########
-    tally_result = fo.tally(features[layer_id],thresholds,savepath="tally.csv")
+    tally_result = fo.tally(features[layer_id],thresholds,savepath="tally"+str(layer_id)+".csv")
 
 ############ STEP 4: generating results ###############
     generate_html_summary(fo.data, layer,
