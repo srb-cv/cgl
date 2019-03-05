@@ -59,11 +59,13 @@ elif MODEL == 'resnet50':
         MODEL_PARALLEL = True
 
 elif MODEL == 'alexnet':
-    FEATURE_NAMES = ['conv4']
+    FEATURE_NAMES = ['conv3','conv4', 'conv5']
     if DATASET == 'places365' or DATASET == 'places50':
-        MODEL_FILE = '/home/mindgarage05/magus/back_up_thesis/saved_models/mg04_models_runs/' \
-                     'zoo/l_2_1_lr0.01_pen0.01_wd0_b256_c50_act0/alexnet_best.pth.tar'
+        FOLDER_NAME= 'l_2_1_lr0.01_wd0_pen0.005_act0_spa0.01_b256_c50'
+        MODEL_FILE = '/home/mindgarage05/magus/back_up_thesis/saved_models/mg03_models_runs/' \
+                     'zoo/'+FOLDER_NAME+'/alexnet_best.pth.tar'
         MODEL_PARALLEL = True
+        OUTPUT_FOLDER = OUTPUT_FOLDER+"_"+FOLDER_NAME
 
 if TEST_MODE:
     WORKERS = 1
