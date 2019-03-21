@@ -58,7 +58,7 @@ parser.add_argument('--penalty', '--penalty-lambda-weight', default=0.0, type=fl
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)')
+                    metavar='W', help='weight decay (default: 1e-4), applies l2 norm',)
 parser.add_argument('--activation-penalty', '--ap', default=0, type=float,
                     metavar='A', help='penalty fdr activation Regularizer (default: 0)')
 parser.add_argument('--spatial-penalty', '--sp', default=0, type=float,
@@ -73,6 +73,8 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('-bn', '--batchnorm', dest='batchnorm', action='store_true',
                     help='applies batch norm activation norms')
+parser.add_argument('-l1', '--l1norm', dest='l1norm', action='store_true',
+                    help='applies l1 norms to all the parameters with --penalty times  contribution to loss')
 parser.add_argument('--pretrained', dest='pretrained', action='store_false',
                     help='use pre-trained model')
 parser.add_argument('--num_classes',default=365, type=int, help='num of class in the model')
@@ -228,6 +230,11 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         if args.penalty == 0:
             weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
             # loss = criterion_loss + weight_reg
+        elif args.l1norm:
+            regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+            weight_reg = regulrizer_init + regularizer.regularize_conv_layers_l1(model, args.penalty)
+            weight_reg = weight_reg.cuda()
+
         else:
             # print("Applying Block Norm Regularization")
             # compute the conv regularizers
@@ -339,6 +346,12 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             if args.penalty == 0:
                 weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
                 # loss = criterion_loss + weight_reg
+
+            elif args.l1norm:
+                regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+                weight_reg = regulrizer_init + regularizer.regularize_conv_layers_l1(model, args.penalty)
+                weight_reg = weight_reg.cuda()
+
             else:
                 # compute the conv regularizers
                 regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()

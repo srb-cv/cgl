@@ -2,6 +2,7 @@ import torch
 import math
 import numpy as np
 import random
+import torch.nn as nn
 
 class RegularizeConvNetwork:
     def __init__(self, number_of_groups=5, group_norm=2,
@@ -39,6 +40,21 @@ class RegularizeConvNetwork:
         regularizer_terms = [self.regularize_tensor_groups(conv_param, eval=eval).cuda()
                              for conv_param in conv_param_list]
 
+        weight_reg = penalty * (sum(regularizer_terms))
+
+        if torch.isnan(weight_reg):
+            print("weight reg nan found, counting as zero")
+            weight_reg = torch.tensor([0.0]).cuda()
+
+        return weight_reg
+
+    def regularize_conv_layers_l1(self, model, penalty, eval=False):
+        regularize_layer_list = ['module.conv1.weight','module.conv2.weight',
+                                 'module.conv3.weight','module.conv4.weight',
+                                 'module.conv5.weight']
+
+        conv_param_list = [dict(model.named_parameters())[layer] for layer in regularize_layer_list]
+        regularizer_terms = [conv_param.norm(1) for conv_param in conv_param_list]
         weight_reg = penalty * (sum(regularizer_terms))
 
         if torch.isnan(weight_reg):
