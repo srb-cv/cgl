@@ -386,8 +386,8 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             else:
                 # Prepare spatial norms
                 spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-                layer_spatial_norm = regularizer.regularize_activations_spatial_norm(soft_receptive_fields)
-                spatial_reg = spatial_regularizer_init + args.spatial_penalty * layer_spatial_norm
+                groupwise_activation_norm = regularizer.regularize_activations_spatial_norm(soft_receptive_fields)
+                spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
                 #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
             loss = criterion_loss + weight_reg + activation_reg + spatial_reg

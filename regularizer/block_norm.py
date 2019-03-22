@@ -131,7 +131,7 @@ class RegularizeConvNetwork:
 
         return groupwise_activation_norms
 
-    def regularize_activation_groups_within_layer_batch_wise_v2(self, feature_maps, layer_penalty=0):
+    def regularize_activation_groups_within_layer_batch_wise_v2(self, feature_maps):
         # all maps for a neuron across batch is compared and  not only a single one
         maps_per_group = int(len(feature_maps[1]) / self.number_of_groups)
         activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
@@ -164,7 +164,7 @@ class RegularizeConvNetwork:
 
         return groupwise_activation_norms
 
-    def regularize_activation_groups_within_layer_batch_wise_v3(self, feature_maps, layer_penalty=0):
+    def regularize_activation_groups_within_layer_batch_wise_v3(self, feature_maps):
         # Random N pair of neurons are compared batch-wise
         maps_per_group = int(len(feature_maps[1]) / self.number_of_groups)
         activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
@@ -209,9 +209,8 @@ class RegularizeConvNetwork:
 
         return groupwise_activation_norms
 
-    def regularize_activation_groups_within_layer_batch_wise_v4(self, feature_maps, layer_penalty=0):
+    def regularize_activation_groups_within_layer_batch_wise_v4(self, feature_maps, num_random_neurons = 3):
         # all maps for a neuron across batch is compared and  not only a multiple ones
-        num_random_neurons = 3
         maps_per_group = int(len(feature_maps[1]) / self.number_of_groups)
         activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
         activation_groups = list(activation_groups)
@@ -248,7 +247,57 @@ class RegularizeConvNetwork:
         return groupwise_activation_norms
 
 
-    def regularize_activations_spatial_norm(self, feature_maps):
+    def regularize_activations_spatial_norm(self, feature_maps, num_groups=2):
+        # whole function at once activations pf size N x C x F_l x F_l
+        batch_size = feature_maps.shape[0]
+        indices = np.indices((feature_maps.shape[2], feature_maps.shape[3]))    # 2 x F_l x F_l
+        indices = torch.Tensor(indices).cuda()
+        x_coordinates = indices[1]                                              # F_l x F_l
+        y_coordinates = indices[0]                                              # F_l x F_l
+        maps_per_group = int(len(feature_maps[1]) / self.number_of_groups)
+        activation_groups = torch.split(feature_maps, maps_per_group, dim=1)
+        activation_groups = list(activation_groups)
+        input = torch.empty(self.number_of_groups)
+        groupwise_activation_norms = torch.zeros_like(input).cuda()
+        group_indices = list(i for i in range(0, num_groups))
+
+        for i in group_indices:
+            current_group = activation_groups[i]
+            feature_map_sums = torch.sum(current_group, (2, 3))                  # N x C
+            feature_map_sums = feature_map_sums.view(-1) # N * C
+            #print(feature_map_sums)
+
+            x_centers = torch.mul(x_coordinates, current_group)                  # N x C x F_l x F_l
+            x_centers = torch.sum(x_centers, (2, 3))                             # N x C
+            x_centers = x_centers.view(-1)                                       # N*C
+            x_centers = torch.div(x_centers, feature_map_sums+ self.epsilon)     # N*C
+
+            y_centers = torch.mul(y_coordinates, current_group)
+            y_centers = torch.sum(y_centers, (2, 3))
+            y_centers = y_centers.view(-1)
+            y_centers = torch.div(y_centers, feature_map_sums+ self.epsilon)     # N*C
+
+            x_centers.unsqueeze_(1).unsqueeze_(1)
+            x_coordinates_expand = x_coordinates.expand(current_group.shape[0] * current_group.shape[1],
+                                                        current_group.shape[2], current_group.shape[3])
+            y_centers.unsqueeze_(1).unsqueeze_(1)
+            y_coordinates_expand = y_coordinates.expand(current_group.shape[0] * current_group.shape[1],
+                                                        current_group.shape[2], current_group.shape[3])
+
+            x_deviations = torch.sub(x_coordinates_expand, x_centers)
+            x_deviations = torch.pow(x_deviations, 2)
+            y_deviations = torch.sub(y_coordinates_expand, y_centers)
+            y_deviations = torch.pow(y_deviations, 2)                            # N*C x F_l x F_l
+
+            num_part_1 = torch.pow(torch.add(x_deviations, y_deviations), 0.5)
+            activations = current_group.view(-1, current_group.shape[2], current_group.shape[3])  # N*C x F_l x F_l
+            num = torch.mul(activations, num_part_1)
+            num = torch.sum(num, (1, 2))                                          # N*C
+            score = torch.div(num, feature_map_sums + self.epsilon)
+            groupwise_activation_norms[i] = torch.div(score.sum(), batch_size * current_group.shape[1])  # 1
+        return groupwise_activation_norms
+
+    def regularize_activations_spatial_bkp(self, feature_maps):
         # whole function at once activations pf size N x C x F_l x F_l
         batch_size = feature_maps.shape[0]
         indices = np.indices((feature_maps.shape[2], feature_maps.shape[3]))    # 2 x F_l x F_l
@@ -288,8 +337,6 @@ class RegularizeConvNetwork:
         score = torch.div(num, feature_map_sums + self.epsilon)
         score = torch.div(score.sum(), batch_size * feature_maps.shape[1])  # 1
         return score
-
-
 
     def regularize_activation_groups_in_adjacent_layers(self, feature_maps, layer_penalty):
         #assert(len(feature_maps)==2)
