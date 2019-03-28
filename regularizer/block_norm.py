@@ -247,7 +247,7 @@ class RegularizeConvNetwork:
         return groupwise_activation_norms
 
 
-    def regularize_activations_spatial_norm(self, feature_maps, num_groups=2):
+    def regularize_activations_spatial_groupwise(self, feature_maps, num_groups=2):
         # whole function at once activations pf size N x C x F_l x F_l
         batch_size = feature_maps.shape[0]
         indices = np.indices((feature_maps.shape[2], feature_maps.shape[3]))    # 2 x F_l x F_l
@@ -264,7 +264,7 @@ class RegularizeConvNetwork:
         for i in group_indices:
             current_group = activation_groups[i]
             feature_map_sums = torch.sum(current_group, (2, 3))                  # N x C
-            feature_map_sums = feature_map_sums.view(-1) # N * C
+            feature_map_sums = feature_map_sums.view(-1)                         # N * C
             #print(feature_map_sums)
 
             x_centers = torch.mul(x_coordinates, current_group)                  # N x C x F_l x F_l
@@ -290,14 +290,14 @@ class RegularizeConvNetwork:
             y_deviations = torch.pow(y_deviations, 2)                            # N*C x F_l x F_l
 
             num_part_1 = torch.pow(torch.add(x_deviations, y_deviations), 0.5)
-            activations = current_group.view(-1, current_group.shape[2], current_group.shape[3])  # N*C x F_l x F_l
+            activations = current_group.contiguous().view(-1, current_group.shape[2], current_group.shape[3])  # N*C x F_l x F_l
             num = torch.mul(activations, num_part_1)
             num = torch.sum(num, (1, 2))                                          # N*C
             score = torch.div(num, feature_map_sums + self.epsilon)
-            groupwise_activation_norms[i] = torch.div(score.sum(), batch_size * current_group.shape[1])  # 1
+            groupwise_activation_norms[i] = torch.div(score.sum(), batch_size * current_group.shape[1] * num_groups)  # 1
         return groupwise_activation_norms
 
-    def regularize_activations_spatial_bkp(self, feature_maps):
+    def regularize_activations_spatial_all(self, feature_maps):
         # whole function at once activations pf size N x C x F_l x F_l
         batch_size = feature_maps.shape[0]
         indices = np.indices((feature_maps.shape[2], feature_maps.shape[3]))    # 2 x F_l x F_l
