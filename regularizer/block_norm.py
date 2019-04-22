@@ -294,7 +294,7 @@ class RegularizeConvNetwork:
             num = torch.mul(activations, num_part_1)
             num = torch.sum(num, (1, 2))                                          # N*C
             score = torch.div(num, feature_map_sums + self.epsilon)
-            groupwise_activation_norms[i] = torch.div(score.sum(), batch_size * current_group.shape[1] * num_groups)  # 1
+            groupwise_activation_norms[i] = torch.div(score.sum(), batch_size)  # 1
         return groupwise_activation_norms
 
     def regularize_activations_spatial_all(self, feature_maps):
@@ -346,8 +346,3 @@ class RegularizeConvNetwork:
         activation_groups = torch.split(feature_maps_layer_2, maps_per_group, dim=1)
         activation_groups = list(activation_groups)
         pass
-
-
-
-
-

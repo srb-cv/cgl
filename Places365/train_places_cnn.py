@@ -263,7 +263,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             ### Preparing for activation norms
             act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
 
-            groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v2(soft_receptive_fields)
+            groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v3(soft_receptive_fields)
             activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
 
         if args.spatial_penalty == 0:
@@ -271,8 +271,8 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         else:
             ### Prepare spatial norms
             spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-            layer_spatial_norm = regularizer.regularize_activations_spatial_norm(soft_receptive_fields)
-            spatial_reg = spatial_regularizer_init + args.spatial_penalty * layer_spatial_norm
+            groupwise_activation_norm = regularizer.regularize_activations_spatial_all(soft_receptive_fields)
+            spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
             # print('Spatial Reg', spatial_reg)
             # print('Act Norms', conv_features[0].norm(1))
             #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
@@ -377,7 +377,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 # Preparing for activation norms
                 act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
 
-                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v2(
+                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v3(
                     soft_receptive_fields)
                 activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
 
@@ -386,7 +386,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             else:
                 # Prepare spatial norms
                 spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-                groupwise_activation_norm = regularizer.regularize_activations_spatial_norm(soft_receptive_fields)
+                groupwise_activation_norm = regularizer.regularize_activations_spatial_all(soft_receptive_fields)
                 spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
                 #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
