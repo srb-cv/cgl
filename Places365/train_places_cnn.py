@@ -120,6 +120,8 @@ def main():
         print("***Applying R1: Group Activation Similarity Norm***")
     if args.spatial_penalty > 0:
         print("***Applying R3: Spatial Norm***")
+    if args.orthogonal_penalty >0:
+        print("***Applying R4: Orthogonality constraints***")
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -251,7 +253,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
         if args.orthogonal_penalty != 0:
             orthogonal_weight_reg = orthogonal_weight_reg + regularizer.regularize_weights_orthogonality(model,
-                                                                                                         layer='conv5',
+                                                                                                         layers=['conv1','conv2','conv3','conv4','conv5'],
                                                                                                          penalty=args.orthogonal_penalty)
             orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
@@ -378,7 +380,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
             if args.orthogonal_penalty != 0:
                 orthogonal_weight_reg = orthogonal_weight_reg + regularizer.regularize_weights_orthogonality(model,
-                                                                                                             layer='conv5',
+                                                                                                             layers=['conv1','conv2','conv3','conv4','conv5'],
                                                                                                              penalty=args.orthogonal_penalty)
                 orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
@@ -453,7 +455,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
         writer.add_scalar('val/reg_term', reg_losses.avg, epoch)
         writer.add_scalar('val/act_term', activation_norm.avg, epoch)
         writer.add_scalar('val/spatial_term', spatial_norm.avg, epoch)
-        writer.add_scalar('train/orthogonality_norm', orthogonal_weight_reg.avg, epoch)
+        writer.add_scalar('train/orthogonality_term', orthogonality_norm.avg, epoch)
         writer.add_scalar('val/prec1', top1.avg, epoch)
         writer.add_scalar('val/prec5', top5.avg, epoch)
     return top1.avg
