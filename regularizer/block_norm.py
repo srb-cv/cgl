@@ -347,11 +347,12 @@ class RegularizeConvNetwork:
         activation_groups = list(activation_groups)
         pass
 
-    def regularize_activations_orthogonality_all(self, model, layer):
+    def regularize_weights_orthogonality(self, model, layer, penalty):
         conv_filters_layer_l = dict(model.named_parameters())["module."+layer+".weight"]
         conv_filters_view = conv_filters_layer_l.view(conv_filters_layer_l.shape[0], -1)
         conv_filters_view_transpose = conv_filters_view.t()
         gram_matrix = torch.mm(conv_filters_view, conv_filters_view_transpose)
         identity_matrix = torch.eye(conv_filters_layer_l.shape[0])
-        score = torch.sub(gram_matrix, identity_matrix)
+        difference_matrix = torch.sub(gram_matrix, identity_matrix)
+        score = penalty * torch.norm(difference_matrix, p='fro')
         return score

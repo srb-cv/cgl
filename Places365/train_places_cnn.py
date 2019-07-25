@@ -63,6 +63,8 @@ parser.add_argument('--activation-penalty', '--ap', default=0, type=float,
                     metavar='A', help='penalty fdr activation Regularizer (default: 0)')
 parser.add_argument('--spatial-penalty', '--sp', default=0, type=float,
                     metavar='S', help='penalty fdr R3 spatial activation Regularizer (default: 0)')
+parser.add_argument('--orthogonal-penalty', '--op', default=0, type=float,
+                    metavar='O', help='penalty R4 for Soft Orthogonality Regularization (default: 0)')
 parser.add_argument('--print-freq', '-p', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -209,6 +211,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
     reg_losses = AverageMeter()
     activation_norm = AverageMeter()
     spatial_norm = AverageMeter()
+    orthogonality_norm = AverageMeter()
 
 
     # switch to train mode
@@ -241,6 +244,17 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
             weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty)
             weight_reg = weight_reg.cuda()
+
+
+        #such not locked
+        #such wow+#
+        orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
+        if args.orthogonal_penalty != 0:
+            orthogonal_weight_reg = orthogonal_weight_reg + regularizer.regularize_weights_orthogonality(model,
+                                                                                                         layer='conv5',
+                                                                                                         penalty=args.orthogonal_penalty)
+            orthogonal_weight_reg = orthogonal_weight_reg.cuda()
+
 
 
         if args.activation_penalty !=0 or args.spatial_penalty !=0:
@@ -277,7 +291,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             # print('Act Norms', conv_features[0].norm(1))
             #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
-        loss = criterion_loss + weight_reg + activation_reg + spatial_reg
+        loss = criterion_loss + weight_reg + activation_reg + spatial_reg + orthogonal_weight_reg
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output, target, topk=(1, 5))
@@ -287,12 +301,14 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         reg_losses.update(weight_reg.item(), input.size(0))
         activation_norm.update(activation_reg.item(), input.size(0))
         spatial_norm.update(spatial_reg.item(), input.size(0))
+        orthogonality_norm.update(orthogonal_weight_reg.item(), input.size(0))
 
         # Display on tensorboard
         writer.add_scalar('train/loss', loss.item(), i)
         writer.add_scalar('train/reg_term', weight_reg.item(), i)
         writer.add_scalar('train/act_term', activation_reg.item(), i)
         writer.add_scalar('train/spatial_term', spatial_reg.item(), i)
+        writer.add_scalar('train/orthogonality_norm', orthogonal_weight_reg.item(), i)
         writer.add_scalar('train/prec1', prec1[0], i)
         writer.add_scalar('train/prec5', prec5[0], i)
 
@@ -313,11 +329,12 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
                   'Reg_term {weight_reg.val:.4f} ({weight_reg.avg:.4f})\t'
                   'Activation_reg {activation_reg.val:.4f} ({activation_reg.avg:.4f})\t'
                   'Spatial_reg {spatial_reg.val:.4f} ({spatial_reg.avg:.4f})\t'
+                  'Orthogonality_reg {orthogonal_weight_reg.val:.4f} ({orthogonal_weight_reg.avg:.4f})\t'
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                    epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses,  weight_reg=reg_losses, activation_reg=activation_norm,
-                   spatial_reg=spatial_norm, top1=top1, top5=top5))
+                   spatial_reg=spatial_norm, orthogonal_weight_reg=orthogonality_norm, top1=top1, top5=top5))
 
 
 def validate(val_loader, model, criterion, regularizer, epoch):
@@ -328,7 +345,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
     reg_losses = AverageMeter()
     activation_norm = AverageMeter()
     spatial_norm = AverageMeter()
-
+    orthogonality_norm = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
@@ -357,6 +374,13 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
                 weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty, eval=True)
                 # loss = criterion_loss + weight_reg
+
+            orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
+            if args.orthogonal_penalty != 0:
+                orthogonal_weight_reg = orthogonal_weight_reg + regularizer.regularize_weights_orthogonality(model,
+                                                                                                             layer='conv5',
+                                                                                                             penalty=args.orthogonal_penalty)
+                orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
             if args.activation_penalty != 0 or args.spatial_penalty != 0:
                 receptive_field = receptive_fields.SoftReceptiveField(number_of_groups=args.groups)
@@ -390,7 +414,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
                 #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
-            loss = criterion_loss + weight_reg + activation_reg + spatial_reg
+            loss = criterion_loss + weight_reg + activation_reg + spatial_reg + orthogonal_weight_reg
 
             # measure accuracy and record loss
             prec1, prec5 = accuracy(output, target, topk=(1, 5))
@@ -400,6 +424,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
             top5.update(prec5[0], input.size(0))
             activation_norm.update(activation_reg.item(), input.size(0))
             spatial_norm.update(spatial_reg.item(), input.size(0))
+            orthogonality_norm.update(orthogonal_weight_reg.item(), input.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -412,10 +437,12 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                       'Reg_term {weight_reg.val:.4f} ({weight_reg.avg:.4f})\t'
                       'Activation_reg {activation_reg.val:.4f} ({activation_reg.avg:.4f})\t'
                       'Spatial_reg {spatial_reg.val:.4f} ({spatial_reg.avg:.4f})\t'
+                      'Orthogonality_reg {orthogonal_weight_reg.val:.4f} ({orthogonal_weight_reg.avg:.4f})\t'
                       'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                       'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                       i, len(val_loader), batch_time=batch_time, loss=losses, weight_reg=reg_losses,
-                       activation_reg=activation_norm, spatial_reg=spatial_norm, top1=top1, top5=top5))
+                    i, len(val_loader), batch_time=batch_time, loss=losses, weight_reg=reg_losses,
+                    activation_reg=activation_norm, spatial_reg=spatial_norm, orthogonal_weight_reg=orthogonality_norm,
+                    top1=top1, top5=top5))
 
         print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
@@ -426,6 +453,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
         writer.add_scalar('val/reg_term', reg_losses.avg, epoch)
         writer.add_scalar('val/act_term', activation_norm.avg, epoch)
         writer.add_scalar('val/spatial_term', spatial_norm.avg, epoch)
+        writer.add_scalar('train/orthogonality_norm', orthogonal_weight_reg.avg, epoch)
         writer.add_scalar('val/prec1', top1.avg, epoch)
         writer.add_scalar('val/prec5', top5.avg, epoch)
     return top1.avg
