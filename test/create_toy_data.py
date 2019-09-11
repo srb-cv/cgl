@@ -1,8 +1,11 @@
+import random
+
 import numpy as np
 from matplotlib import pyplot as plt
 import cv2
 from itertools import combinations_with_replacement
 from itertools import product
+from tqdm import tqdm
 import os
 
 class ToyDataset:
@@ -21,7 +24,7 @@ class ToyDataset:
         self.image_height = 64
         self.image_width = 64
         self.no_images_per_class = 640
-        #self.no_images_per_class = 6
+        #self.no_images_per_class = 60
         self.root_data_path = "synthetic_data_v2/data"
         self.label_concept_path = "synthetic_data_v2/concept_label"
 
@@ -143,41 +146,46 @@ class ToyDataset:
 
         colors, shapes = class_tuple
 
-        x = np.random.randint(c, img.shape[1] - c, size=1)
-        y = np.random.randint(c, img.shape[0] / 2 - c, size=1)
-        self.draw_shapes(img, shapes[0], self.color_dict[colors[0]], (x, y))
-        self.draw_labels_shapes(shape_label, shapes[0], (x, y))
-        self.draw_label_colors(color_label, shapes[0], colors[0], (x, y))
-        self.draw_labels(label, shapes[0], colors[0], (x, y))
+        x1 = np.random.randint(c, img.shape[1] - c, size=1)
+        y1 = np.random.randint(c, img.shape[0] / 2 - c, size=1)
+        x2 = np.random.randint(c, img.shape[1] - c, size=1)
+        y2 = np.random.randint(img.shape[0] / 2 + c + 2, img.shape[0] - c, size=1)
+        pts = [(x1,y1), (x2,y2)]
+        random.shuffle(pts)
+        self.draw_shapes(img, shapes[0], self.color_dict[colors[0]], pts[0])
+        self.draw_labels_shapes(shape_label, shapes[0], pts[0])
+        self.draw_label_colors(color_label, shapes[0], colors[0], pts[0])
+        self.draw_labels(label, shapes[0], colors[0], pts[0])
 
-        x = np.random.randint(c, img.shape[1] - c, size=1)
-        y = np.random.randint(img.shape[0] / 2 + c + 2, img.shape[0] - c, size=1)
-        self.draw_shapes(img, shapes[1], self.color_dict[colors[1]], (x, y))
-        self.draw_labels_shapes(shape_label, shapes[1], (x, y))
-        self.draw_label_colors(color_label, shapes[1], colors[1], (x, y))
-        self.draw_labels(label, shapes[1], colors[1], (x, y))
+        self.draw_shapes(img, shapes[1], self.color_dict[colors[1]], pts[1])
+        self.draw_labels_shapes(shape_label, shapes[1], pts[1])
+        self.draw_label_colors(color_label, shapes[1], colors[1], pts[1])
+        self.draw_labels(label, shapes[1], colors[1], pts[1])
         return img, shape_label, color_label, label
 
     def create_dataset(self):
         self.create_directories()
         print("Directories successfully created, creating images..")
-        for class_no,a_class in enumerate(self.classes):
-            separator = "_"
-            a_class_path = separator.join([j for i in a_class for j in i])
-            class_save_path = os.path.join(self.root_data_path, a_class_path)
-            for i in range(self.no_images_per_class):
-                image, shape_label, color_label, label = self.create_class_images(a_class)
-                base_name = f"{class_no * self.no_images_per_class + i + 1:05d}"
-                image_path = os.path.join(class_save_path, base_name+'.jpg')
-                cv2.imwrite(image_path, image[..., ::-1])
-                label_image_path = os.path.join(self.label_concept_path,base_name+'.jpg')
-                cv2.imwrite(label_image_path, image[..., ::-1])
-                shape_label_path = os.path.join(self.label_concept_path,base_name+'_shape.png')
-                cv2.imwrite(shape_label_path, shape_label[..., ::-1])
-                color_label_path = os.path.join(self.label_concept_path,base_name+'_color.png')
-                cv2.imwrite(color_label_path, color_label[..., ::-1])
-                label_path = os.path.join(self.label_concept_path,base_name+'_color_shape.png')
-                cv2.imwrite(label_path, label[..., ::-1])
+        with tqdm(total=len(self.classes),desc="Writing images per category") as pbar:
+            for class_no,a_class in enumerate(self.classes):
+                separator = "_"
+                a_class_path = separator.join([j for i in a_class for j in i])
+                class_save_path = os.path.join(self.root_data_path, a_class_path)
+                for i in range(self.no_images_per_class):
+                    image, shape_label, color_label, label = self.create_class_images(a_class)
+                    base_name = f"{class_no * self.no_images_per_class + i + 1:05d}"
+                    image_path = os.path.join(class_save_path, base_name+'.jpg')
+                    cv2.imwrite(image_path, image[..., ::-1])
+                    label_image_path = os.path.join(self.label_concept_path,base_name+'.jpg')
+                    cv2.imwrite(label_image_path, image[..., ::-1])
+                    shape_label_path = os.path.join(self.label_concept_path,base_name+'_shape.png')
+                    cv2.imwrite(shape_label_path, shape_label[..., ::-1])
+                    color_label_path = os.path.join(self.label_concept_path,base_name+'_color.png')
+                    cv2.imwrite(color_label_path, color_label[..., ::-1])
+                    label_path = os.path.join(self.label_concept_path,base_name+'_color_shape.png')
+                    cv2.imwrite(label_path, label[..., ::-1])
+                pbar.update(1)
+
 
     def create_directories(self):
         if os.path.exists(self.root_data_path) or os.path.exists(self.label_concept_path):
