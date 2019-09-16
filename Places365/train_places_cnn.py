@@ -18,12 +18,15 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 
 from model import alexnet
+from model import custom_model_1
+from model import custom_model_2
 from regularizer import block_norm
 from regularizer import receptive_fields
-from regularizer.norm_analysis import inspect_act_norms
+#from regularizer.norm_analysis import inspect_act_norms
 
 
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter()
 
 
@@ -103,6 +106,18 @@ def main():
         else:
             model = alexnet.Alexnet_module(num_classes=args.num_classes)
         regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
+    elif args.arch.lower().startswith('custom_model_1'):
+        if args.batchnorm:
+            model = custom_model_1.CustomModel1_bn(num_classes=args.num_classes)
+        else:
+            model = custom_model_1.CustomModel1(num_classes=args.num_classes)
+        regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
+    elif args.arch.lower().startswith('custom_model_2'):
+        if args.batchnorm:
+            model = custom_model_2.CustomModel2_bn(num_classes=args.num_classes)
+        else:
+            model = custom_model_2.CustomModel2(num_classes=args.num_classes)
+        regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
     else:
         model = models.__dict__[args.arch](num_classes=args.num_classes)
 
@@ -151,28 +166,47 @@ def main():
     valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
+    
+    if args.arch.lower().startswith('custom'):
+        train_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(traindir, transforms.Compose([
+                transforms.RandomResizedCrop(64),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=True,
+            num_workers=args.workers, pin_memory=True)
 
-    train_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(traindir, transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(valdir, transforms.Compose([
+                transforms.Resize(64),
+                transforms.CenterCrop(64),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
+    else:
+        train_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(traindir, transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=True,
+            num_workers=args.workers, pin_memory=True)
 
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
-
-
+        val_loader = torch.utils.data.DataLoader(
+            datasets.ImageFolder(valdir, transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ])),
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
         validate(val_loader, model, criterion, regularizer, epoch=0)
