@@ -3,6 +3,7 @@ import torch
 import torchvision
 import torch.nn as nn
 from model import alexnet
+from model import custom_model_1
 
 use_alexnet_vision = False
 
@@ -15,7 +16,8 @@ def loadmodel(hook_fn):
             if use_alexnet_vision:
                 model = torchvision.models.__dict__[settings.MODEL](num_classes=settings.NUM_CLASSES)
             else:
-                model = alexnet.Alexnet_module(num_classes=settings.NUM_CLASSES)
+                #model = alexnet.Alexnet_module(num_classes=settings.NUM_CLASSES)
+                model = custom_model_1.CustomModel1(num_classes=settings.NUM_CLASSES)
             if settings.MODEL_PARALLEL:
                 state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint[
                     'state_dict'].items()}  # the data parallel layer will add 'module' before each layer name
