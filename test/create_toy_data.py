@@ -1,7 +1,6 @@
 import random
 
 import numpy as np
-from matplotlib import pyplot as plt
 import cv2
 from itertools import combinations_with_replacement
 from itertools import product
@@ -14,19 +13,19 @@ class ToyDataset:
         self.shapes = ['CIRCLE', 'SQUARE', 'TRIANGLE']
         self.classes = []
         self.color_dict = {'RED': (255, 0, 0), 'GREEN': (0, 255, 0), 'BLUE': (0, 0, 255)}
-        self.color_label_dict = {'RED': 10, 'GREEN': 20, 'BLUE': 30}
-        self.shape_label_dict = {'CIRCLE': 10, 'SQUARE': 20, 'TRIANGLE': 30}
+        self.color_label_dict = {'RED': 1, 'GREEN': 2, 'BLUE': 3}
+        self.shape_label_dict = {'CIRCLE': 4, 'SQUARE': 5, 'TRIANGLE': 6}
 
-        self.label_dict = {'CIRCLE_RED': 10, 'CIRCLE_GREEN': 20, 'CIRCLE_BLUE': 30,
-                           'SQUARE_RED': 40, 'SQUARE_GREEN': 50, 'SQUARE_BLUE': 60,
-                           'TRIANGLE_RED': 70, 'TRIANGLE_GREEN': 80, 'TRIANGLE_BLUE': 90}
+        self.label_dict = {'CIRCLE_RED': 7, 'CIRCLE_GREEN': 8, 'CIRCLE_BLUE': 9,
+                           'SQUARE_RED': 10, 'SQUARE_GREEN': 11, 'SQUARE_BLUE': 12,
+                           'TRIANGLE_RED': 13, 'TRIANGLE_GREEN': 14, 'TRIANGLE_BLUE': 15}
         self.shape_size = 12
         self.image_height = 64
         self.image_width = 64
         self.no_images_per_class = 640
         #self.no_images_per_class = 60
-        self.root_data_path = "synthetic_data_v2/data"
-        self.label_concept_path = "synthetic_data_v2/concept_label"
+        self.root_data_path = "/scratch/data/synthetic_data_v2/data"
+        self.label_concept_path = "/scratch/data/synthetic_data_v2/concept_label"
 
     def create_classes(self):
         perm_colors = product(self.colors, repeat=2)
