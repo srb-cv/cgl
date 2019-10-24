@@ -9,8 +9,10 @@ import time
 import util.upsample as upsample
 import util.vecquantile as vecquantile
 import multiprocessing.pool as pool
-from loader.data_loader import load_csv
-from loader.data_loader import SegmentationData, SegmentationPrefetcher
+# from loader.data_loader import load_csv
+# from loader.data_loader import SegmentationData, SegmentationPrefetcher
+from loader.custom_data_loader import load_csv
+from loader.custom_data_loader import SegmentationData, SegmentationPrefetcher
 
 features_blobs = []
 def hook_feature(module, input, output):
