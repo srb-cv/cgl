@@ -199,6 +199,9 @@ class ToyDataset:
                 a_class_path = "_".join([j for i in a_class for j in i])
                 os.makedirs(os.path.join(self.root_data_path, a_class_path))
 
+    def calculate_c_value(self, shape):
+        pass
+
 data_obj = ToyDataset()
 data_obj.create_dataset()
 # data_obj.create_classes()
