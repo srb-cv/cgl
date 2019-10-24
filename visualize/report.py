@@ -42,6 +42,7 @@ def generate_html_summary(ds, layer, maxfeature=None, features=None, thresholds=
             expdir.fn_safe(layer))
     bargraph.bar_graph_svg(ed, layer,
                            tally_result=tally_result,
+                           threshold=settings.SCORE_THRESHOLD,
                            rendered_order=rendered_order,
                            save=ed.filename('html/' + barfn))
     html.extend([
