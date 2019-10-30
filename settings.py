@@ -6,12 +6,13 @@ MODEL = 'toy_data_model'                          # model arch: resnet18, alexne
 DATASET = 'toy_data'                       # model trained on: places365 or imagenet or places50 or toy_data
 QUANTILE = 0.005                            # the threshold used for activation
 SEG_THRESHOLD = 0.04                        # the threshold used for visualization
-SCORE_THRESHOLD = 0.04                      # the threshold used for IoU score (in HTML file)
+SCORE_THRESHOLD = 0.08                      # the threshold used for IoU score (in HTML file)
 TOPN = 10                                   # to show top N image with highest activation for each unit
 PARALLEL = 1                                # how many process is used for tallying (Experiments show that 1 is the fastest)
 #CATAGORIES = ["object", "part","scene","texture","color"] # concept categories that are chosen to detect: "object", "part", "scene", "material", "texture", "color"
 CATAGORIES = ["color","shape","shape_color"]
-OUTPUT_FOLDER = "result/pytorch_"+MODEL+"_"+DATASET # result will be stored in this folder
+OUTPUT_FOLDER = "/home/mindgarage05/magus/projects/netdissect-lite/result/pytorch_"+\
+                MODEL+"_thresh"+str(SCORE_THRESHOLD)+"_"+DATASET # result will be stored in this folder
 
 ########### sub settings ###########
 # In most of the case, you don't have to change them.
@@ -46,7 +47,7 @@ elif DATASET == 'imagenet':
 elif DATASET == 'places50' or DATASET == 'places50_reduced':
     NUM_CLASSES = 50
 elif DATASET == 'toy_data':
-    NUM_CLASSES = 45
+    NUM_CLASSES = 2
 if MODEL == 'resnet18':
     FEATURE_NAMES = ['layer4']
     if DATASET == 'places365':
@@ -79,10 +80,10 @@ elif MODEL == 'alexnet':
 elif MODEL == 'toy_data_model':
     FEATURE_NAMES = ['conv1']
     if DATASET == 'toy_data':
-        #FOLDER_NAME= 'l_2_1_lr0.01_wd0_pen0.005_act0_spa0.01_b256_c50_id49'
-        MODEL_FILE = '/home/mindgarage05/magus/projects/netdissect-lite/Places365/custom_model_1_best.pth.tar'
+        FOLDER_NAME= 'custom2_l_2_1_lr0.01_wd0_pen0.01_act0.001_spa0_b32_c2_orth0.001_id161'
+        MODEL_FILE = '/home/mindgarage05/magus/projects/pycharm_projec46/zoo/'+FOLDER_NAME+'/custom_model_1_best.pth.tar'
         MODEL_PARALLEL = True
-        OUTPUT_FOLDER = OUTPUT_FOLDER+"_"+"custom_data_result"
+        OUTPUT_FOLDER = OUTPUT_FOLDER+"_"+FOLDER_NAME
 
 
 if TEST_MODE:
