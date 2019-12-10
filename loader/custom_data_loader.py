@@ -8,7 +8,7 @@ import csv
 import settings
 import numpy as np
 from collections import OrderedDict
-from scipy.misc import imread
+from imageio import imread
 from multiprocessing import Pool, cpu_count
 from multiprocessing.pool import ThreadPool
 from scipy.ndimage.interpolation import zoom
