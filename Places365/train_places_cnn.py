@@ -499,8 +499,9 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
         if os.path.isdir(args.save):
             torch.save(state, os.path.join(args.save, filename+'_latest.pth.tar'))
         else:
-            print("Invalid Save Directory,\n Saving model in the working Directory")
-            torch.save(state, filename + '_latest.pth.tar')
+            #print("Invalid Save Directory,\n Saving model in the working Directory")
+            os.makedirs(args.save)
+            torch.save(state, os.path.join(args.save, filename+'_latest.pth.tar'))
     else:
         torch.save(state, filename+'_latest.pth.tar')
     if is_best:
