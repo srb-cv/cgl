@@ -19,7 +19,7 @@ import numpy as np
 from model import alexnet
 from regularizer import receptive_fields
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter()
 
 model_names = sorted(name for name in models.__dict__
