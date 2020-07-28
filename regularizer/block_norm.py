@@ -32,10 +32,11 @@ class RegularizeConvNetwork:
         return layer_norm_data
 
     def regularize_conv_layers(self, model, penalty, eval=False):
-        regularize_layer_list = ['module.conv1.weight','module.conv2.weight',
-                                 'module.conv3.weight','module.conv4.weight',
-                                 'module.conv5.weight']
-
+        param_name_list = dict(model.named_parameters()).keys()
+        # regularize_layer_list = ['module.conv1.weight','module.conv2.weight',
+        #                          'module.conv3.weight','module.conv4.weight',
+        #                          'module.conv5.weight']                
+        regularize_layer_list = [param for param in param_name_list if "conv" in param and "weight" in param]
         conv_param_list = [dict(model.named_parameters())[layer] for layer in regularize_layer_list]
         regularizer_terms = [self.regularize_tensor_groups(conv_param, eval=eval).cuda()
                              for conv_param in conv_param_list]
@@ -347,10 +348,12 @@ class RegularizeConvNetwork:
         activation_groups = list(activation_groups)
         pass
 
-    def regularize_weights_orthogonality(self, model, layers, penalty):
+    def regularize_weights_orthogonality(self, model, penalty):
         score = torch.tensor(0.0).cuda()
-        for layer in layers:
-            conv_filters_layer_l = dict(model.named_parameters())["module."+layer+".weight"]
+        param_name_list = dict(model.named_parameters()).keys()
+        regularize_layer_list = [param for param in param_name_list if "conv" in param and "weight" in param]
+        for layer in regularize_layer_list:
+            conv_filters_layer_l = dict(model.named_parameters())[layer]           
             conv_filters_view = conv_filters_layer_l.view(conv_filters_layer_l.shape[0], -1)
             conv_filters_view_transpose = conv_filters_view.t()
             gram_matrix = torch.mm(conv_filters_view, conv_filters_view_transpose)

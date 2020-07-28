@@ -252,9 +252,8 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         #such wow+#
         orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
         if args.orthogonal_penalty != 0:
-            orthogonal_weight_reg = orthogonal_weight_reg + regularizer.regularize_weights_orthogonality(model,
-                                                                                                         layers=['conv1','conv2','conv3','conv4','conv5'],
-                                                                                                         penalty=args.orthogonal_penalty)
+            orthogonal_weight_reg = orthogonal_weight_reg + regularizer.\
+                                regularize_weights_orthogonality(model,penalty=args.orthogonal_penalty)
             orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
 
@@ -379,9 +378,8 @@ def validate(val_loader, model, criterion, regularizer, epoch):
 
             orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
             if args.orthogonal_penalty != 0:
-                orthogonal_weight_reg = orthogonal_weight_reg + regularizer.regularize_weights_orthogonality(model,
-                                                                                                             layers=['conv1','conv2','conv3','conv4','conv5'],
-                                                                                                             penalty=args.orthogonal_penalty)
+                orthogonal_weight_reg = orthogonal_weight_reg + regularizer.\
+                    regularize_weights_orthogonality(model, penalty= args.orthogonal_penalty)
                 orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
             if args.activation_penalty != 0 or args.spatial_penalty != 0:
