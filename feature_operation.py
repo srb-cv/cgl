@@ -1,7 +1,8 @@
 
 import os
 from torch.autograd import Variable as V
-from scipy.misc import imresize
+#from scipy.misc import imresize
+from PIL import Image
 import numpy as np
 import torch
 import settings
@@ -172,7 +173,8 @@ class FeatureOperator:
                 for unit_id in range(units):
                     feature_map = features[img_index][unit_id]
                     if feature_map.max() > threshold[unit_id]:
-                        mask = imresize(feature_map, (concept_map['sh'], concept_map['sw']), mode='F')
+                        #mask = imresize(feature_map, (concept_map['sh'], concept_map['sw']), mode='F')
+                        mask = np.array(Image.fromarray(feature_map).resize((concept_map['sh'], concept_map['sw'])))
                         #reduction = int(round(settings.IMG_SIZE / float(concept_map['sh'])))
                         #mask = upsample.upsampleL(fieldmap, feature_map, shape=(concept_map['sh'], concept_map['sw']), reduction=reduction)
                         indexes = np.argwhere(mask > threshold[unit_id])
