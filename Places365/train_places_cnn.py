@@ -7,40 +7,33 @@ import os
 import shutil
 import time
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
-import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
+import torchvision.transforms as transforms
+from torch.utils.tensorboard import SummaryWriter
 
 from model import alexnet
-from regularizer import block_norm
-from regularizer import receptive_fields
-from regularizer.norm_analysis import inspect_act_norms
+from regularizer import block_norm, receptive_fields
 
-
-from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter()
 
-
-import wideresnet
-
 model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
-
+                     if name.islower() and not name.startswith("__")
+                     and callable(models.__dict__[name]))
 
 parser = argparse.ArgumentParser(description='PyTorch Places365 Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
                     help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        ' (default: resnet18)')
+                         ' | '.join(model_names) +
+                         ' (default: resnet18)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -58,7 +51,7 @@ parser.add_argument('--penalty', '--penalty-lambda-weight', default=0.0, type=fl
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4), applies l2 norm',)
+                    metavar='W', help='weight decay (default: 1e-4), applies l2 norm', )
 parser.add_argument('--activation-penalty', '--ap', default=0, type=float,
                     metavar='A', help='penalty fdr activation Regularizer (default: 0)')
 parser.add_argument('--spatial-penalty', '--sp', default=0, type=float,
@@ -79,25 +72,20 @@ parser.add_argument('-l1', '--l1norm', dest='l1norm', action='store_true',
                     help='applies l1 norms to all the parameters with --penalty times  contribution to loss')
 parser.add_argument('--pretrained', dest='pretrained', action='store_false',
                     help='use pre-trained model')
-parser.add_argument('--num_classes',default=365, type=int, help='num of class in the model')
-parser.add_argument('--dataset',default='places365',help='which dataset to train')
-parser.add_argument('--gpu', default=0, type=int,
-                    help = 'GPU id to use')
-
+parser.add_argument('--num_classes', default=365, type=int, help='num of class in the model')
+parser.add_argument('--dataset', default='places365', help='which dataset to train')
+parser.add_argument('--gpu', default=None, type=int,
+                    help='GPU id to use')
 
 best_prec1 = 0
-
+args = parser.parse_args()
 
 def main():
     global args, best_prec1
-    args = parser.parse_args()
     print(args)
     # create model
     print("=> creating model '{}'".format(args.arch))
-    if args.arch.lower().startswith('wideresnet'):
-        # a customized resnet model with last feature map size as 14x14 for better class activation mapping
-        model  = wideresnet.resnet50(num_classes=args.num_classes)
-    elif args.arch.lower().startswith('alexnet'):
+    if args.arch.lower().startswith('alexnet'):
         if args.batchnorm:
             model = alexnet.Alexnet_module_bn(num_classes=args.num_classes)
         else:
@@ -120,7 +108,7 @@ def main():
         print("***Applying R1: Group Activation Similarity Norm***")
     if args.spatial_penalty > 0:
         print("***Applying R3: Spatial Norm***")
-    if args.orthogonal_penalty >0:
+    if args.orthogonal_penalty > 0:
         print("***Applying R4: Orthogonality constraints***")
 
     # define loss function (criterion) and optimizer
@@ -140,11 +128,11 @@ def main():
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
-            #print("=> loaded optimizer parameter", optimizer.param_groups )
+            # print("=> loaded optimizer parameter", optimizer.param_groups )
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
-    cudnn.benchmark = True
+    # cudnn.benchmark = True
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
@@ -172,28 +160,21 @@ def main():
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-
-
     if args.evaluate:
         validate(val_loader, model, criterion, regularizer, epoch=0)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
+        early_stop_patience = 0
         adjust_learning_rate(optimizer, epoch)
-
-        # # calculate activatuion norm
-        # inspect_act_norms(train_loader, model, args)
-
         # train for one epoch
         train(train_loader, model, criterion, optimizer, regularizer, epoch)
-
         # evaluate on validation set
         prec1 = validate(val_loader, model, criterion, regularizer, epoch)
-
-
-
         # remember best prec@1 and save checkpoint
         is_best = prec1 > best_prec1
+        if not is_best:
+            early_stop_patience +=1
         best_prec1 = max(prec1, best_prec1)
         save_checkpoint({
             'epoch': epoch + 1,
@@ -202,6 +183,9 @@ def main():
             'best_prec1': best_prec1,
             'optimizer': optimizer.state_dict()
         }, is_best, args.arch.lower())
+        if early_stop_patience > 7:
+            print("Early stop the training because validation loss doesn't improve after a given patience.")
+            break
 
 
 def train(train_loader, model, criterion, optimizer, regularizer, epoch):
@@ -215,7 +199,6 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
     spatial_norm = AverageMeter()
     orthogonality_norm = AverageMeter()
 
-
     # switch to train mode
     model.train()
 
@@ -228,7 +211,6 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             input = input.cuda(args.gpu, non_blocking=True)
         target = target.cuda(args.gpu, non_blocking=True)
 
-        # compute output
         output, conv_features = model(input)
         criterion_loss = criterion(output, target)
 
@@ -247,50 +229,47 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty)
             weight_reg = weight_reg.cuda()
 
-
-        #such not locked
-        #such wow+#
         orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
         if args.orthogonal_penalty != 0:
-            orthogonal_weight_reg = orthogonal_weight_reg + regularizer.\
-                                regularize_weights_orthogonality(model,penalty=args.orthogonal_penalty)
+            orthogonal_weight_reg = orthogonal_weight_reg + regularizer. \
+                regularize_weights_orthogonality(model, penalty=args.orthogonal_penalty)
             orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
-
-
-        if args.activation_penalty !=0 or args.spatial_penalty !=0:
+        if args.activation_penalty != 0 or args.spatial_penalty != 0:
             receptive_field = receptive_fields.SoftReceptiveField(number_of_groups=args.groups)
-
+            soft_receptive_fields = []
             if args.batchnorm:
-                soft_receptive_fields = receptive_field.\
+                layer_rec_field = receptive_field. \
                     calculate_receptive_field_layer_batch_norm(conv_features[0],
                                                                model.module.bn5.running_mean,
                                                                model.module.bn5.running_var)
+                soft_receptive_fields.append(layer_rec_field)
             else:
-                soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
-                    conv_features[0])
-            assert (soft_receptive_fields.size() == conv_features[0].size())
-
+                for feature_maps in conv_features:
+                    layer_rec_field = receptive_field.calculate_receptive_field_layer_no_batch_norm(feature_maps)
+                    assert (layer_rec_field.size() == feature_maps.size())
+                    soft_receptive_fields.append(layer_rec_field)
 
         if args.activation_penalty == 0:
             activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
         else:
-            ### Preparing for activation norms
-            act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-
-            groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v3(soft_receptive_fields)
-            activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
+            act_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+            groupwise_activation_norm = torch.tensor(0.0).cuda()
+            for feature_maps in soft_receptive_fields:
+                act_norms = regularizer. \
+                    regularize_activation_groups_within_layer_batch_wise_v3(feature_maps)
+                groupwise_activation_norm += act_norms.sum()
+            activation_reg = act_regularizer_init + args.activation_penalty * groupwise_activation_norm.sum()
 
         if args.spatial_penalty == 0:
             spatial_reg = torch.tensor(0.0, requires_grad=True).cuda()
         else:
-            ### Prepare spatial norms
             spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
             groupwise_activation_norm = regularizer.regularize_activations_spatial_all(soft_receptive_fields)
             spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
             # print('Spatial Reg', spatial_reg)
             # print('Act Norms', conv_features[0].norm(1))
-            #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
+            # print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
         loss = criterion_loss + weight_reg + activation_reg + spatial_reg + orthogonal_weight_reg
 
@@ -333,9 +312,9 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
                   'Orthogonality_reg {orthogonal_weight_reg.val:.4f} ({orthogonal_weight_reg.avg:.4f})\t'
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses,  weight_reg=reg_losses, activation_reg=activation_norm,
-                   spatial_reg=spatial_norm, orthogonal_weight_reg=orthogonality_norm, top1=top1, top5=top5))
+                epoch, i, len(train_loader), batch_time=batch_time,
+                data_time=data_time, loss=losses, weight_reg=reg_losses, activation_reg=activation_norm,
+                spatial_reg=spatial_norm, orthogonal_weight_reg=orthogonality_norm, top1=top1, top5=top5))
 
 
 def validate(val_loader, model, criterion, regularizer, epoch):
@@ -354,8 +333,8 @@ def validate(val_loader, model, criterion, regularizer, epoch):
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
             if args.gpu is not None:
-                input = input.cuda(args.gpu, non_blocking= True)
-            target = target.cuda(args.gpu, non_blocking= True)
+                input = input.cuda(args.gpu, non_blocking=True)
+            target = target.cuda(args.gpu, non_blocking=True)
 
             # compute output
             output, conv_features = model(input)
@@ -378,8 +357,8 @@ def validate(val_loader, model, criterion, regularizer, epoch):
 
             orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
             if args.orthogonal_penalty != 0:
-                orthogonal_weight_reg = orthogonal_weight_reg + regularizer.\
-                    regularize_weights_orthogonality(model, penalty= args.orthogonal_penalty)
+                orthogonal_weight_reg = orthogonal_weight_reg + regularizer. \
+                    regularize_weights_orthogonality(model, penalty=args.orthogonal_penalty)
                 orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
             if args.activation_penalty != 0 or args.spatial_penalty != 0:
@@ -412,7 +391,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
                 spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
                 groupwise_activation_norm = regularizer.regularize_activations_spatial_all(soft_receptive_fields)
                 spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
-                #print("Receptive Fields Norm", soft_receptive_fields.norm(1))
+                # print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
             loss = criterion_loss + weight_reg + activation_reg + spatial_reg + orthogonal_weight_reg
 
@@ -447,7 +426,6 @@ def validate(val_loader, model, criterion, regularizer, epoch):
         print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
 
-
         # Display on tensorboard
         writer.add_scalar('val/loss', losses.avg, epoch)
         writer.add_scalar('val/reg_term', reg_losses.avg, epoch)
@@ -462,19 +440,19 @@ def validate(val_loader, model, criterion, regularizer, epoch):
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     if args.save:
         if os.path.isdir(args.save):
-            torch.save(state, os.path.join(args.save, filename+'_latest.pth.tar'))
+            torch.save(state, os.path.join(args.save, filename + '_latest.pth.tar'))
         else:
-           # print("Invalid Save Directory,\n Saving model in the working Directory")
-           # torch.save(state, filename + '_latest.pth.tar')
+            # print("Invalid Save Directory,\n Saving model in the working Directory")
+            # torch.save(state, filename + '_latest.pth.tar')
             os.makedirs(args.save)
-            torch.save(state, os.path.join(args.save, filename+'_latest.pth.tar'))
+            torch.save(state, os.path.join(args.save, filename + '_latest.pth.tar'))
     else:
-        torch.save(state, filename+'_latest.pth.tar')
+        torch.save(state, filename + '_latest.pth.tar')
     if is_best:
         if args.save:
             if os.path.isdir(args.save):
-                shutil.copyfile(os.path.join(args.save,filename + '_latest.pth.tar'),
-                                os.path.join(args.save,filename + '_best.pth.tar'))
+                shutil.copyfile(os.path.join(args.save, filename + '_latest.pth.tar'),
+                                os.path.join(args.save, filename + '_best.pth.tar'))
             else:
                 print("Invalid Save Directory, \n Saving model in the current working directory")
                 shutil.copyfile(filename + '_latest.pth.tar', filename + '_best.pth.tar')
@@ -484,6 +462,7 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -498,7 +477,6 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-
 
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
@@ -522,6 +500,9 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+
+
 
 if __name__ == '__main__':
     main()
