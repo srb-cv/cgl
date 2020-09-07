@@ -1,0 +1,14 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# IDE files and folder
+.vscode/
+.idea/
+.ipynb_checkpoints/
+runs/
+Places365/runs/
