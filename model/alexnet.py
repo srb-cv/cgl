@@ -70,7 +70,7 @@ class Alexnet_module(nn.Module):
         # x_conv3 = x.clone()
         x = F.relu(x, inplace=True)
         x = self.conv4(x)
-        # x_conv4 = x.clone()
+        x_conv4 = x.clone()
         x = F.relu(x, inplace=True)
         x = self.conv5(x)
         x_conv5 = x.clone()
@@ -82,7 +82,7 @@ class Alexnet_module(nn.Module):
         x = F.relu(self.fc2(x), inplace=True)
         x = self.fc3(x)
         # conv_features = [x_conv1, x_conv2, x_conv3, x_conv4, x_conv5]
-        conv_features = [x_conv5]
+        conv_features = [x_conv4, x_conv5]
         return x, conv_features
 
 

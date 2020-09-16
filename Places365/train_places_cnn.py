@@ -4,10 +4,11 @@
 
 import argparse
 import os
+import sys
 import shutil
 import time
+import logging
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -18,7 +19,7 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
 
-from model import alexnet
+from model import alexnet, vgg
 from regularizer import block_norm, receptive_fields
 
 writer = SummaryWriter()
@@ -79,6 +80,10 @@ parser.add_argument('--gpu', default=None, type=int,
 
 best_prec1 = 0
 args = parser.parse_args()
+# logging.basicConfig(filename='myfile.log', level=logging.DEBUG)
+# logger = logging.getLogger()
+# sys.stderr.write = logger.error
+# sys.stdout.write = logger.info
 
 def main():
     global args, best_prec1
@@ -90,7 +95,8 @@ def main():
             model = alexnet.Alexnet_module_bn(num_classes=args.num_classes)
         else:
             model = alexnet.Alexnet_module(num_classes=args.num_classes)
-        regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
+    elif args.arch.lower().startswith('vgg'):
+        model = vgg.VggModule16(num_classes=args.num_classes)
     else:
         model = models.__dict__[args.arch](num_classes=args.num_classes)
 
@@ -117,6 +123,9 @@ def main():
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
+
+    regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
+
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -184,7 +193,8 @@ def main():
             'optimizer': optimizer.state_dict()
         }, is_best, args.arch.lower())
         if early_stop_patience > 7:
-            print("Early stop the training because validation loss doesn't improve after a given patience.")
+            print("Early stop the training because validation loss doesn't"
+                  " improve after a given patience.")
             break
 
 
@@ -259,7 +269,8 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
                 act_norms = regularizer. \
                     regularize_activation_groups_within_layer_batch_wise_v3(feature_maps)
                 groupwise_activation_norm += act_norms.sum()
-            activation_reg = act_regularizer_init + args.activation_penalty * groupwise_activation_norm.sum()
+            normalized_activation_norm = groupwise_activation_norm.sum() / len(conv_features)
+            activation_reg = act_regularizer_init + args.activation_penalty * normalized_activation_norm.sum()
 
         if args.spatial_penalty == 0:
             spatial_reg = torch.tensor(0.0, requires_grad=True).cuda()
