@@ -65,6 +65,8 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('--save', default='', type=str, metavar='PATH',
                     help='path where model file is to be saved (default: none)')
+parser.add_argument('--logdir', default='', type=str, metavar='PATH',
+                    help='path where logs shoould be saved(default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('-bn', '--batchnorm', dest='batchnorm', action='store_true',
@@ -80,10 +82,13 @@ parser.add_argument('--gpu', default=None, type=int,
 
 best_prec1 = 0
 args = parser.parse_args()
-# logging.basicConfig(filename='myfile.log', level=logging.DEBUG)
-# logger = logging.getLogger()
-# sys.stderr.write = logger.error
-# sys.stdout.write = logger.info
+if args.logdir != '':
+    log_path = os.path.basename(os.path.normpath(args.save)) + '.log'
+    log_path = os.path.join(args.logdir, log_path)
+    logging.basicConfig(filename=log_path, level=logging.INFO)
+    logger = logging.getLogger()
+    sys.stderr.write = logger.error
+    sys.stdout.write = logger.info
 
 def main():
     global args, best_prec1
@@ -100,11 +105,7 @@ def main():
     else:
         model = models.__dict__[args.arch](num_classes=args.num_classes)
 
-    if args.arch.lower().startswith('vgg'):
-        model.features = torch.nn.DataParallel(model.features)
-        model.cuda()
-    else:
-        model = torch.nn.DataParallel(model).cuda()
+    model = torch.nn.DataParallel(model).cuda()
     print(model)
     if args.weight_decay > 0:
         print("***Applying Normal Weight Decay***")
@@ -217,8 +218,7 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        if args.gpu is not None:
-            input = input.cuda(args.gpu, non_blocking=True)
+        input = input.cuda(args.gpu, non_blocking=True)
         target = target.cuda(args.gpu, non_blocking=True)
 
         output, conv_features = model(input)
@@ -343,8 +343,7 @@ def validate(val_loader, model, criterion, regularizer, epoch):
     with torch.no_grad():
         end = time.time()
         for i, (input, target) in enumerate(val_loader):
-            if args.gpu is not None:
-                input = input.cuda(args.gpu, non_blocking=True)
+            input = input.cuda(args.gpu, non_blocking=True)
             target = target.cuda(args.gpu, non_blocking=True)
 
             # compute output
