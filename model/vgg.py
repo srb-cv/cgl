@@ -56,7 +56,7 @@ class VggModule16(nn.Module):
         x = F.relu(self.fc2(x), inplace=True)
         x = self.dropout_fc2(x)
         x = self.fc3(x)
-        conv_features = [x_conv12, x_conv13]
+        conv_features = {'conv12':x_conv12, 'conv13':x_conv13}
         return x, conv_features
 
     def _initialize_weights(self):
