@@ -2,15 +2,25 @@
 GPU = True                                  # running on GPU is highly suggested
 TEST_MODE = False                           # turning on the testmode means the code will run on a small dataset.
 CLEAN = True                               # set to "True" if you want to clean the temporary large files after generating result
+<<<<<<< Updated upstream
 MODEL = 'alexnet'                          # model arch: resnet18, alexnet, resnet50, densenet161
 DATASET = 'imagenet'                       # model trained on: places365 or imagenet
+=======
+MODEL = 'vgg'                          # model arch: resnet18, alexnet, resnet50, densenet161
+DATASET = 'places365'                       # model trained on: places365 or imagenet
+>>>>>>> Stashed changes
 QUANTILE = 0.005                            # the threshold used for activation
 SEG_THRESHOLD = 0.04                        # the threshold used for visualization
 SCORE_THRESHOLD = 0.04                      # the threshold used for IoU score (in HTML file)
 TOPN = 10                                   # to show top N image with highest activation for each unit
 PARALLEL = 1                                # how many process is used for tallying (Experiments show that 1 is the fastest)
+<<<<<<< Updated upstream
 CATAGORIES = ["object", "part","scene","material","texture","color"] # concept categories that are chosen to detect: "object", "part", "scene", "material", "texture", "color"
 OUTPUT_FOLDER = "/data/varshneya/result/pytorch_"+MODEL+"_"+DATASET+"cat6" # result will be stored in this folder
+=======
+CATAGORIES = ["object", "part","scene","texture","color"] # concept categories that are chosen to detect: "object", "part", "scene", "material", "texture", "color"
+OUTPUT_FOLDER = "/work/ML/varshneya/result/pytorch_"+MODEL+"_"+DATASET # result will be stored in this folder
+>>>>>>> Stashed changes
 
 ########### sub settings ###########
 # In most of the case, you don't have to change them.
@@ -26,10 +36,10 @@ OUTPUT_FOLDER = "/data/varshneya/result/pytorch_"+MODEL+"_"+DATASET+"cat6" # res
 # INDEX_FILE: if you turn on the TEST_MODE, actually you should provide this file on your own
 
 if MODEL != 'alexnet':
-    DATA_DIRECTORY = '/scratch/data/broden1_224'
+    DATA_DIRECTORY = '/work/ML/broden1_224'
     IMG_SIZE = 224
 else:
-    DATA_DIRECTORY = '/data0/varshneya/broden1_227'
+    DATA_DIRECTORY = '/work/ML/broden1_227'
     IMG_SIZE = 227
 
 if DATASET == 'places365':
@@ -61,15 +71,16 @@ elif MODEL == 'resnet50':
 elif MODEL == 'alexnet':
     FEATURE_NAMES = ['conv1','conv2','conv3','conv4', 'conv5']
     if DATASET in ['places365','places50','imagenet']:
-        FOLDER_NAME= 'l_2_1_lr0.01_wd0_pen1e-3_act0_spa0_b256_c1000_id217'
-        MODEL_FILE= 'zoo/'+FOLDER_NAME+'/alexnet_best.pth.tar'
+        FOLDER_NAME= 'l_2_1_lr0.01_wd1e-4_pen0_act0_spa0_b256_c1000_id218'
+        MODEL_FILE = '/home/varshney/magus/project/netdissect-lite/' \
+                     'zoo/'+FOLDER_NAME+'/alexnet_best.pth.tar'
         MODEL_PARALLEL = True
         OUTPUT_FOLDER = OUTPUT_FOLDER+"_"+FOLDER_NAME
 
 elif MODEL == 'vgg':
     FEATURE_NAMES = ['conv7','conv10','conv11','conv12','conv13']
     if DATASET in ['places365','places50','imagenet']:
-        FOLDER_NAME= 'l_2_1_lr0.01_wd1e-4_pen0_act0_spa0_b256_c1000_id218'
+        FOLDER_NAME= 'l_2_1_lr0.01_wd1e-4_pen0_act0_spa0_b256_c365_id220'
         MODEL_FILE = '/home/varshney/magus/project/netdissect-lite/' \
                      'zoo/'+FOLDER_NAME+'/vgg_best.pth.tar'
         MODEL_PARALLEL = True
