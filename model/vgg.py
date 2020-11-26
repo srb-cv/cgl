@@ -41,13 +41,17 @@ class VggModule16(nn.Module):
         x = F.max_pool2d(F.relu(self.conv7(x), inplace=True), kernel_size=2, stride=2)
         x = F.relu(self.conv8(x), inplace=True)
         x = F.relu(self.conv9(x), inplace=True)
-        x = F.max_pool2d(F.relu(self.conv10(x), inplace=True), kernel_size=2, stride=2)
-        x = F.relu(self.conv11(x), inplace=True)
+        x = self.conv10(x)
+        x_conv10 = x.clone()
+        x = F.max_pool2d(F.relu(x, inplace=True), kernel_size=2, stride=2)
+        x = self.conv11(x)
+        x_conv11 = x.clone()
+        x = F.relu(x, inplace=True)
         x = self.conv12(x)
         x_conv12 = x.clone()
         x = F.relu(x, inplace=True)
         x = self.conv13(x)
-        x_conv13 = x.clone()
+        # x_conv13 = x.clone()
         x = F.max_pool2d(F.relu(x, inplace=True), kernel_size=2, stride=2)
         # add avg pool
         x = x.view(x.size(0), 512 * 7 * 7)
@@ -56,7 +60,8 @@ class VggModule16(nn.Module):
         x = F.relu(self.fc2(x), inplace=True)
         x = self.dropout_fc2(x)
         x = self.fc3(x)
-        conv_features = {'conv12':x_conv12, 'conv13':x_conv13}
+        conv_features = {'conv10': x_conv10, 'conv11': x_conv11,
+                         'conv12': x_conv12}
         return x, conv_features
 
     def _initialize_weights(self):
