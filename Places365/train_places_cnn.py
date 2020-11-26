@@ -8,6 +8,7 @@ import sys
 import shutil
 import time
 import logging
+import warnings
 
 import torch
 import torch.nn as nn
@@ -18,11 +19,12 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
+import torch.backends.cudnn as cudnn
 
 from model import alexnet, vgg
 from regularizer import block_norm, receptive_fields
 
-writer = SummaryWriter()
+
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -97,11 +99,19 @@ if args.logdir != '':
     sys.stderr.write = logger.error
     sys.stdout.write = logger.info
 
+filename_suffix = os.path.basename(os.path.normpath(args.save))
+filename_suffix = filename_suffix.split('_')[-1]
+writer = SummaryWriter(comment='_'+ filename_suffix)
+
 
 def main():
     global args, best_prec1
     print(args)
     # create model
+    if args.gpu is not None:
+        warnings.warn('You have chosen a specific GPU. This will completely '
+                      'disable data parallelism.')
+
     print("=> creating model '{}'".format(args.arch))
     if args.arch.lower().startswith('alexnet'):
         if args.batchnorm:
@@ -151,7 +161,7 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
-    # cudnn.benchmark = True
+    cudnn.benchmark = True
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
