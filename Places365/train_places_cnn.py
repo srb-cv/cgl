@@ -8,6 +8,7 @@ import sys
 import shutil
 import time
 import logging
+import warnings
 
 import torch
 import torch.nn as nn
@@ -18,11 +19,12 @@ import torchvision.datasets as datasets
 import torchvision.models as models
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
+import torch.backends.cudnn as cudnn
 
 from model import alexnet, vgg
 from regularizer import block_norm, receptive_fields
 
-writer = SummaryWriter()
+
 
 model_names = sorted(name for name in models.__dict__
                      if name.islower() and not name.startswith("__")
@@ -55,6 +57,10 @@ parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4), applies l2 norm', )
 parser.add_argument('--activation-penalty', '--ap', default=0, type=float,
                     metavar='A', help='penalty fdr activation Regularizer (default: 0)')
+parser.add_argument('--actnorm_layers', default='', nargs='+',
+                    help='apply activation norms on these layers')
+parser.add_argument('--spatialnorm_layers', default='',  nargs='+',
+                    help='apply spatial norms on these layers')
 parser.add_argument('--spatial-penalty', '--sp', default=0, type=float,
                     metavar='S', help='penalty fdr R3 spatial activation Regularizer (default: 0)')
 parser.add_argument('--orthogonal-penalty', '--op', default=0, type=float,
@@ -83,17 +89,29 @@ parser.add_argument('--gpu', default=None, type=int,
 best_prec1 = 0
 args = parser.parse_args()
 if args.logdir != '':
-    log_path = os.path.basename(os.path.normpath(args.save)) + '.log'
+    if args.evaluate:
+        log_path = os.path.basename(os.path.dirname(args.resume)) + '.log'
+    else: 
+        log_path = os.path.basename(os.path.normpath(args.save)) + '.log'
     log_path = os.path.join(args.logdir, log_path)
     logging.basicConfig(filename=log_path, level=logging.INFO)
     logger = logging.getLogger()
     sys.stderr.write = logger.error
     sys.stdout.write = logger.info
 
+filename_suffix = os.path.basename(os.path.normpath(args.save))
+filename_suffix = filename_suffix.split('_')[-1]
+writer = SummaryWriter(comment='_'+ filename_suffix)
+
+
 def main():
     global args, best_prec1
     print(args)
     # create model
+    if args.gpu is not None:
+        warnings.warn('You have chosen a specific GPU. This will completely '
+                      'disable data parallelism.')
+
     print("=> creating model '{}'".format(args.arch))
     if args.arch.lower().startswith('alexnet'):
         if args.batchnorm:
@@ -125,7 +143,8 @@ def main():
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
-    regularizer = block_norm.RegularizeConvNetwork(number_of_groups=args.groups)
+    regularizer = block_norm.RegularizeConvNetwork(
+        number_of_groups=args.groups)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -142,7 +161,7 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
-    # cudnn.benchmark = True
+    cudnn.benchmark = True
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
@@ -184,7 +203,7 @@ def main():
         # remember best prec@1 and save checkpoint
         is_best = prec1 > best_prec1
         if not is_best:
-            early_stop_patience +=1
+            early_stop_patience += 1
         best_prec1 = max(prec1, best_prec1)
         save_checkpoint({
             'epoch': epoch + 1,
@@ -196,7 +215,7 @@ def main():
         if early_stop_patience > 7:
             print("Early stop the training because validation loss doesn't"
                   " improve after a given patience.")
-            break
+            return
 
 
 def train(train_loader, model, criterion, optimizer, regularizer, epoch):
@@ -229,60 +248,88 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
             # loss = criterion_loss + weight_reg
         elif args.l1norm:
             regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-            weight_reg = regulrizer_init + regularizer.regularize_conv_layers_l1(model, args.penalty)
+            weight_reg = regulrizer_init + regularizer.\
+                regularize_conv_layers_l1(model, args.penalty)
             weight_reg = weight_reg.cuda()
 
         else:
             # print("Applying Block Norm Regularization")
             # compute the conv regularizers
             regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-            weight_reg = regulrizer_init + regularizer.regularize_conv_layers(model, args.penalty)
+            weight_reg = regulrizer_init + regularizer.\
+                regularize_conv_layers(model, args.penalty)
             weight_reg = weight_reg.cuda()
 
         orthogonal_weight_reg = torch.tensor(0.0, requires_grad=True).cuda()
         if args.orthogonal_penalty != 0:
-            orthogonal_weight_reg = orthogonal_weight_reg + regularizer. \
-                regularize_weights_orthogonality(model, penalty=args.orthogonal_penalty)
+            orthogonal_weight_reg = orthogonal_weight_reg + regularizer.\
+                regularize_weights_orthogonality(
+                    model, penalty=args.orthogonal_penalty)
             orthogonal_weight_reg = orthogonal_weight_reg.cuda()
 
         if args.activation_penalty != 0 or args.spatial_penalty != 0:
-            receptive_field = receptive_fields.SoftReceptiveField(number_of_groups=args.groups)
-            soft_receptive_fields = []
+            receptive_field = receptive_fields.SoftReceptiveField(
+                number_of_groups=args.groups)
+            soft_receptive_fields = {}
             if args.batchnorm:
-                layer_rec_field = receptive_field. \
-                    calculate_receptive_field_layer_batch_norm(conv_features[0],
-                                                               model.module.bn5.running_mean,
-                                                               model.module.bn5.running_var)
-                soft_receptive_fields.append(layer_rec_field)
+                for key, feature_map in conv_features.items():
+                    layer_rec_field = receptive_field.\
+                        calculate_receptive_field_layer_batch_norm(
+                            feature_map,
+                            model.module.bn5.running_mean,
+                            model.module.bn5.running_var)
+                soft_receptive_fields[key] = layer_rec_field
             else:
-                for feature_maps in conv_features:
-                    layer_rec_field = receptive_field.calculate_receptive_field_layer_no_batch_norm(feature_maps)
+                for key, feature_maps in conv_features.items():
+                    layer_rec_field = receptive_field.\
+                        calculate_receptive_field_layer_no_batch_norm(
+                            feature_maps)
                     assert (layer_rec_field.size() == feature_maps.size())
-                    soft_receptive_fields.append(layer_rec_field)
+                    soft_receptive_fields[key] = layer_rec_field
 
         if args.activation_penalty == 0:
             activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
         else:
             act_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-            groupwise_activation_norm = torch.tensor(0.0).cuda()
-            for feature_maps in soft_receptive_fields:
+            groupwise_activation_norm = torch.tensor(
+                0.0, requires_grad=True).cuda()
+            act_receptive_fields = [
+                soft_receptive_fields[k] for k in args.actnorm_layers]
+            for activations in act_receptive_fields:
                 act_norms = regularizer. \
-                    regularize_activation_groups_within_layer_batch_wise_v3(feature_maps)
+                    regularize_activation_groups_within_layer_batch_wise_v3(
+                        activations)
                 groupwise_activation_norm += act_norms.sum()
-            normalized_activation_norm = groupwise_activation_norm.sum() / len(conv_features)
-            activation_reg = act_regularizer_init + args.activation_penalty * normalized_activation_norm.sum()
+            normalized_activation_norm = groupwise_activation_norm.sum() / len(
+                act_receptive_fields)
+            activation_reg = (act_regularizer_init
+                              + args.activation_penalty
+                              * normalized_activation_norm.sum())
 
         if args.spatial_penalty == 0:
             spatial_reg = torch.tensor(0.0, requires_grad=True).cuda()
         else:
-            spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-            groupwise_activation_norm = regularizer.regularize_activations_spatial_all(soft_receptive_fields)
-            spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
+            spatial_regularizer_init = torch.tensor(
+                0.0, requires_grad=True).cuda()
+            groupwise_spatial_norm = torch.tensor(
+                0.0, requires_grad=True).cuda()
+            spatial_receptive_fields = [
+                soft_receptive_fields[k] for k in args.spatialnorm_layers]
+            for activations in spatial_receptive_fields:
+                spatial_norms = regularizer.\
+                    regularize_activations_spatial_all(activations)
+                groupwise_spatial_norm += spatial_norms.sum()
+            normalized_spatial_norm = groupwise_spatial_norm.sum() / len(
+                spatial_receptive_fields)
+            spatial_reg = (spatial_regularizer_init
+                           + args.spatial_penalty
+                           * normalized_spatial_norm.sum())
             # print('Spatial Reg', spatial_reg)
             # print('Act Norms', conv_features[0].norm(1))
             # print("Receptive Fields Norm", soft_receptive_fields.norm(1))
 
-        loss = criterion_loss + weight_reg + activation_reg + spatial_reg + orthogonal_weight_reg
+        loss = (criterion_loss + weight_reg
+                + activation_reg + spatial_reg + orthogonal_weight_reg)
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output, target, topk=(1, 5))
@@ -299,7 +346,8 @@ def train(train_loader, model, criterion, optimizer, regularizer, epoch):
         writer.add_scalar('train/reg_term', weight_reg.item(), i)
         writer.add_scalar('train/act_term', activation_reg.item(), i)
         writer.add_scalar('train/spatial_term', spatial_reg.item(), i)
-        writer.add_scalar('train/orthogonality_norm', orthogonal_weight_reg.item(), i)
+        writer.add_scalar('train/orthogonality_norm',
+                          orthogonal_weight_reg.item(), i)
         writer.add_scalar('train/prec1', prec1[0], i)
         writer.add_scalar('train/prec5', prec5[0], i)
 
@@ -373,35 +421,44 @@ def validate(val_loader, model, criterion, regularizer, epoch):
 
             if args.activation_penalty != 0 or args.spatial_penalty != 0:
                 receptive_field = receptive_fields.SoftReceptiveField(number_of_groups=args.groups)
-
+                soft_receptive_fields = {}
                 if args.batchnorm:
-                    soft_receptive_fields = receptive_field. \
-                        calculate_receptive_field_layer_batch_norm(conv_features[0],
-                                                                   model.module.bn5.running_mean,
-                                                                   model.module.bn5.running_var)
+                    for key, feature_map in conv_features.items():
+                        layer_rec_field = receptive_field. \
+                            calculate_receptive_field_layer_batch_norm(feature_map,
+                                                                    model.module.bn5.running_mean,
+                                                                    model.module.bn5.running_var)
+                    soft_receptive_fields[key] = layer_rec_field
                 else:
-                    soft_receptive_fields = receptive_field.calculate_receptive_field_layer_no_batch_norm(
-                        conv_features[0])
-                assert (soft_receptive_fields.size() == conv_features[0].size())
+                    for key, feature_maps in conv_features.items():
+                        layer_rec_field = receptive_field.calculate_receptive_field_layer_no_batch_norm(feature_maps)
+                        assert (layer_rec_field.size() == feature_maps.size())
+                        soft_receptive_fields[key]= layer_rec_field
 
             if args.activation_penalty == 0:
                 activation_reg = torch.tensor(0.0, requires_grad=True).cuda()
             else:
-                # Preparing for activation norms
-                act_regulrizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-
-                groupwise_activation_norm = regularizer.regularize_activation_groups_within_layer_batch_wise_v3(
-                    soft_receptive_fields)
-                activation_reg = act_regulrizer_init + args.activation_penalty * groupwise_activation_norm.sum()
+                act_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
+                groupwise_activation_norm = torch.tensor(0.0, requires_grad=True).cuda()
+                act_receptive_fields = [soft_receptive_fields[k] for k in args.actnorm_layers]
+                for activations in act_receptive_fields:
+                    act_norms = regularizer. \
+                        regularize_activation_groups_within_layer_batch_wise_v3(activations)
+                    groupwise_activation_norm += act_norms.sum()
+                normalized_activation_norm = groupwise_activation_norm.sum() / len(act_receptive_fields)
+                activation_reg = act_regularizer_init + args.activation_penalty * normalized_activation_norm.sum()
 
             if args.spatial_penalty == 0:
                 spatial_reg = torch.tensor(0.0, requires_grad=True).cuda()
             else:
-                # Prepare spatial norms
                 spatial_regularizer_init = torch.tensor(0.0, requires_grad=True).cuda()
-                groupwise_activation_norm = regularizer.regularize_activations_spatial_all(soft_receptive_fields)
-                spatial_reg = spatial_regularizer_init + args.spatial_penalty * groupwise_activation_norm.sum()
-                # print("Receptive Fields Norm", soft_receptive_fields.norm(1))
+                groupwise_spatial_norm =  torch.tensor(0.0, requires_grad=True).cuda()
+                spatial_receptive_fields = [soft_receptive_fields[k] for k in args.spatialnorm_layers]
+                for activations in spatial_receptive_fields:
+                    spatial_norms = regularizer.regularize_activations_spatial_all(activations)
+                    groupwise_spatial_norm += spatial_norms.sum()
+                normalized_spatial_norm = groupwise_spatial_norm.sum() / len(spatial_receptive_fields)
+                spatial_reg = spatial_regularizer_init + args.spatial_penalty * normalized_spatial_norm.sum()
 
             loss = criterion_loss + weight_reg + activation_reg + spatial_reg + orthogonal_weight_reg
 

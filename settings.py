@@ -2,15 +2,15 @@
 GPU = True                                  # running on GPU is highly suggested
 TEST_MODE = False                           # turning on the testmode means the code will run on a small dataset.
 CLEAN = True                               # set to "True" if you want to clean the temporary large files after generating result
-MODEL = 'alexnet'                          # model arch: resnet18, alexnet, resnet50, densenet161
-DATASET = 'imagenet'                       # model trained on: places365 or imagenet
+MODEL = 'vgg'                          # model arch: resnet18, alexnet, resnet50, densenet161
+DATASET = 'places365'                       # model trained on: places365 or imagenet
 QUANTILE = 0.005                            # the threshold used for activation
 SEG_THRESHOLD = 0.04                        # the threshold used for visualization
 SCORE_THRESHOLD = 0.04                      # the threshold used for IoU score (in HTML file)
 TOPN = 10                                   # to show top N image with highest activation for each unit
 PARALLEL = 1                                # how many process is used for tallying (Experiments show that 1 is the fastest)
-CATAGORIES = ["object", "part","scene","material","texture","color"] # concept categories that are chosen to detect: "object", "part", "scene", "material", "texture", "color"
-OUTPUT_FOLDER = "/data/varshneya/result/pytorch_"+MODEL+"_"+DATASET+"cat6" # result will be stored in this folder
+CATAGORIES = ["object", "part","scene","texture","color","material"] # concept categories that are chosen to detect: "object", "part", "scene", "material", "texture", "color"
+OUTPUT_FOLDER = "/work/ML/varshneya/result/pytorch_"+MODEL+"_"+DATASET # result will be stored in this folder
 
 ########### sub settings ###########
 # In most of the case, you don't have to change them.
@@ -29,7 +29,7 @@ if MODEL != 'alexnet':
     DATA_DIRECTORY = '/data0/varshneya/broden1_224'
     IMG_SIZE = 224
 else:
-    DATA_DIRECTORY = '/data0/varshneya/broden1_227'
+    DATA_DIRECTORY = '/work/ML/broden1_227'
     IMG_SIZE = 227
 
 if DATASET == 'places365':

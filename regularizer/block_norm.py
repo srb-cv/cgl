@@ -10,7 +10,7 @@ class RegularizeConvNetwork:
         self.number_of_groups = number_of_groups
         self.group_norm = group_norm
         self.layer_norm = layer_norm
-        self.epsilon = torch.tensor(1.0, requires_grad=True).cuda()
+        self.epsilon = torch.tensor(1e-4, requires_grad=True).cuda()
 
     def regularize_tensor_groups(self, conv_weight_params, eval=False):
         neurons_per_group = math.floor(conv_weight_params.shape[0] / self.number_of_groups)

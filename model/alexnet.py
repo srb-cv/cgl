@@ -63,11 +63,13 @@ class Alexnet_module(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
+        x_conv1 = x.clone()
         x = F.max_pool2d(F.relu(x, inplace=True), kernel_size=3, stride=2)
         x = self.conv2(x)
+        x_conv2 = x.clone()
         x = F.max_pool2d(F.relu(x, inplace=True), kernel_size=3, stride=2)
         x = self.conv3(x)
-        # x_conv3 = x.clone()
+        x_conv3 = x.clone()
         x = F.relu(x, inplace=True)
         x = self.conv4(x)
         x_conv4 = x.clone()
@@ -81,8 +83,9 @@ class Alexnet_module(nn.Module):
         x = self.dropout(x)
         x = F.relu(self.fc2(x), inplace=True)
         x = self.fc3(x)
-        # conv_features = [x_conv1, x_conv2, x_conv3, x_conv4, x_conv5]
-        conv_features = [x_conv4, x_conv5]
+        # conv_features = [x_conv2, x_conv3, x_conv4, x_conv5]
+        conv_features = {'conv1': x_conv1, 'conv2': x_conv2, 'conv3': x_conv3, 
+        'conv4': x_conv4, 'conv5': x_conv5}
         return x, conv_features
 
 
