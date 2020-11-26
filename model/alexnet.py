@@ -200,3 +200,34 @@ def alexnet_module_bn(pretrained=False, **kwargs):
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['alexnet']))
     return model
+
+
+def copy_params(alexnet_modular, alexnet_vision):
+    parameters_conv = [alexnet_modular.conv1, alexnet_modular.conv2, alexnet_modular.conv3,
+                       alexnet_modular.conv4, alexnet_modular.conv5]
+    parameters_linear = [alexnet_modular.fc1, alexnet_modular.fc2, alexnet_modular.fc3]
+    j = 0
+    for i in range(len(alexnet_vision.features)):
+        l1 = alexnet_vision.features[i]
+        l2 = parameters_conv[j]
+        if isinstance(l1, nn.Conv2d) and isinstance(l2, nn.Conv2d):
+            j += 1
+            assert l1.weight.size() == l2.weight.size()
+            assert l1.bias.size() == l2.bias.size()
+            l2.weight.data = l1.weight.data
+            l2.bias.data = l1.bias.data
+            if j == len(parameters_conv):
+                break
+
+    j = 0
+    for i in range(len(alexnet_vision.classifier)):
+        l1 = alexnet_vision.classifier[i]
+        l2 = parameters_linear[j]
+        if isinstance(l1, nn.Linear) and isinstance(l2, nn.Linear):
+            j += 1
+            assert l1.weight.size() == l2.weight.size()
+            assert l1.bias.size() == l2.bias.size()
+            l2.weight.data = l1.weight.data
+            l2.bias.data = l1.bias.data
+            if j == len(parameters_linear):
+                break

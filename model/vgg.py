@@ -73,17 +73,17 @@ class VggModule16(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
 
-def vgg_module(pretrained=False, **kwargs):
+def vgg_module16(num_classes, pretrained=False, **kwargs):
     print("Define vgg in modular form")
-    model = VggModule16(**kwargs)
+    model = VggModule16(num_classes=num_classes, **kwargs)
     if pretrained:
         import torchvision
         vgg16 = torchvision.models.vgg16(pretrained=True)
-        copy_params_vgg(model, vgg16)
+        copy_params(model, vgg16)
     return model
 
 
-def copy_params_vgg(vgg16_modular, vgg16_vision):
+def copy_params(vgg16_modular, vgg16_vision):
     parameters_conv = [vgg16_modular.conv1, vgg16_modular.conv2, vgg16_modular.conv3, vgg16_modular.conv4,
                        vgg16_modular.conv5, vgg16_modular.conv6, vgg16_modular.conv7, vgg16_modular.conv8,
                        vgg16_modular.conv9, vgg16_modular.conv10, vgg16_modular.conv11, vgg16_modular.conv12,
