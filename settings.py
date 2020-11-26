@@ -26,7 +26,7 @@ OUTPUT_FOLDER = "/data/varshneya/result/pytorch_"+MODEL+"_"+DATASET+"cat6" # res
 # INDEX_FILE: if you turn on the TEST_MODE, actually you should provide this file on your own
 
 if MODEL != 'alexnet':
-    DATA_DIRECTORY = '/scratch/data/broden1_224'
+    DATA_DIRECTORY = '/data0/varshneya/broden1_224'
     IMG_SIZE = 224
 else:
     DATA_DIRECTORY = '/data0/varshneya/broden1_227'
@@ -61,16 +61,16 @@ elif MODEL == 'resnet50':
 elif MODEL == 'alexnet':
     FEATURE_NAMES = ['conv1','conv2','conv3','conv4', 'conv5']
     if DATASET in ['places365','places50','imagenet']:
-        FOLDER_NAME= 'l_2_1_lr0.01_wd0_pen1e-3_act0_spa0_b256_c1000_id217'
-        MODEL_FILE= 'zoo/'+FOLDER_NAME+'/alexnet_best.pth.tar'
+        FOLDER_NAME= 'l_2_1_lr0.01_wd0_pen5e-3_act0_spa0_b256_c1000_id243'
+        MODEL_FILE= '/data0/varshneya/zoo/'+FOLDER_NAME+'/alexnet_best.pth.tar'
         MODEL_PARALLEL = True
         OUTPUT_FOLDER = OUTPUT_FOLDER+"_"+FOLDER_NAME
 
-elif MODEL == 'vgg':
+elif MODEL == 'vgg16':
     FEATURE_NAMES = ['conv7','conv10','conv11','conv12','conv13']
     if DATASET in ['places365','places50','imagenet']:
-        FOLDER_NAME= 'l_2_1_lr0.01_wd1e-4_pen0_act0_spa0_b256_c1000_id218'
-        MODEL_FILE = '/home/varshney/magus/project/netdissect-lite/' \
+        FOLDER_NAME= 'l_2_1_lr0.01_wd0_pen1e-3_act0_spa0_b256_c1000_id239_vgg_imagenet'
+        MODEL_FILE = '/data0/varshneya/' \
                      'zoo/'+FOLDER_NAME+'/vgg_best.pth.tar'
         MODEL_PARALLEL = True
         OUTPUT_FOLDER = OUTPUT_FOLDER+"_"+FOLDER_NAME
